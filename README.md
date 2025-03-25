@@ -33,6 +33,13 @@ write `modprobe` in linux terminal worked, and `man modprobe` confirmed it.
 seems to be that there are 2 locations for modules `/lib/modules/uname -r/` and  `/sys/modules`
 
 
+### Listing Current Loaded Modules
+https://docs.oracle.com/en/operating-systems/oracle-linux/6/admin/modules-list.html
+
+using `lsmod`
+
+
+
 ## General Notes
 
 ---
