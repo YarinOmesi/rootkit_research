@@ -22,8 +22,9 @@ after visiting this https://stackoverflow.com/questions/9094237/whats-the-differ
 found the `Documentation/kbuild/modules`
 
 ### How To Add Or Remove Modules From Kernel
+i did `ls /usr/sbin/ | grep mod` and found `rmmod` `insmod`
 
-install module from source to current kernel
+put the module in kernels modules directory
 `make -C $KDIR M=$PWD modules_install`
 
 ---
@@ -31,6 +32,11 @@ I read `linux/kernel/module/kmod.c`, and i have seems code the looks like a cli 
 write `modprobe` in linux terminal worked, and `man modprobe` confirmed it.
 ---
 seems to be that there are 2 locations for modules `/lib/modules/uname -r/` and  `/sys/modules`
+
+I used `insmod` and `rmmod`, could not make modprobe work
+
+when tring to delete my module getting `modprobe: FATAL: Module yarin_message not found.`.
+
 
 
 ### Listing Current Loaded Modules
