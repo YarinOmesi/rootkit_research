@@ -2,11 +2,12 @@
 #include <linux/kernel.h>
 
 static int __init entrypoint(void){
+    pr_info("Yarin Module EntryPoint");
     return 0;
 }
 
 static void __exit cleanup(void){
-
+    pr_info("Yarin Module cleanup");
 }
 
 module_init(entrypoint)

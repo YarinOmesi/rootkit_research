@@ -2,6 +2,12 @@
 
 ## Step 1
 
+### How To Print From Module
+i have used `dmesg` in the past to check what `/dev/ttyN` my USB device has connected to,
+so i assume this is related here.
+
+Found `printk-basics` in `core-api` that explain how to print message from kernel.
+
 ### How To Write A Module
 - In Linux Repo, At linux/inlude/linux/module.h:80, code the describe initializing a module.
   - `module_init(fn)` `module_exit(fn)`
@@ -17,16 +23,15 @@ found the `Documentation/kbuild/modules`
 
 ### How To Add Or Remove Modules From Kernel
 
+install module from source to current kernel
+`make -C $KDIR M=$PWD modules_install`
+
 ---
 I read `linux/kernel/module/kmod.c`, and i have seems code the looks like a cli application.
 write `modprobe` in linux terminal worked, and `man modprobe` confirmed it.
 ---
 seems to be that there are 2 locations for modules `/lib/modules/uname -r/` and  `/sys/modules`
 
-### Install Module
-
-`make -C $KDIR M=$PWD modules_install`
-/home/yarin/CLionProjects/linux/arch/x86/boot/bzImage
 
 ## General Notes
 
@@ -37,8 +42,19 @@ Tried to compile the kernel and had the following error
 the solution seems to fix the error https://www.reddit.com/r/voidlinux/comments/11pmp2g/i_cant_compile_the_kernel/?rdt=61937
 
 ---
-Running linux with Qemu
+### Running linux with Qemu
 https://www.qemu.org/docs/master/system/linuxboot.html
+
 https://vccolombo.github.io/cybersecurity/linux-kernel-qemu-setup/
+
+
+got the following error `Failed to start Remount Root and Kernel File Systems`
+solved it by adding 
+```
+CONFIG_CONFIGFS_FS=y
+CONFIG_SECURITYFS=y
+```
+to linux .config
+
 
 
