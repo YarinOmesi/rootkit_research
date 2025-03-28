@@ -74,6 +74,19 @@ function returns.
 ## Implementation Notes
 `getdents` returns only filename.
 
+found `regs_set_return_value` to change return value.
+
+
+### How I Am Hiding A File
+for now hiding all files named `hideme`.
+
+using `kretprobe` for callbacks when `getdent64` syscall enters and returns.
+
+1. when syscall enters, i capture all its arguments (directory fd, buffer ptr, buffer size)
+2. when syscall returns, i capture the return value (the length of entries in buffer bytes)
+3. searching the result entries to hide at the provided buffer.
+4. if entry found, copy the rest of the buffer over the found entry (so it will be overridden with the next entry)
+5. change the return value to the new length to entries in buffer (substrate the entry size of entry to hide from the original size)
 
 
 
