@@ -22,33 +22,34 @@ intercepting somehow the call to `getdents64` and filtering my entries
 
 found this https://docs.kernel.org/core-api/entry.html
 
+## Selecting Interception Method
 
-##### signals
+#### signals
 reading about linux traps
 not that relevant because this is different than syscall
 
-#### ptrace
+### ptrace
 - https://stackoverflow.com/questions/18577956/how-to-use-ptrace-to-get-a-consistent-view-of-multiple-threads
 - https://unix.stackexchange.com/questions/649368/interception-syscalls-and-make-change-in-their-arguments 
 - https://security.stackexchange.com/questions/33528/force-all-user-processes-to-be-ptraced
 - https://www.linuxjournal.com/article/6100
 - https://stackoverflow.com/questions/12974110/simple-kernel-multithreading
 
-#### Tools 
+### Tools 
 systemtap
 
 https://stackoverflow.com/questions/29840213/how-do-i-trace-a-system-call-in-linux
 
 reading this lead me to `trace` directory and to `ftrace`/ `fprobe`
 
-#### `fprobe` / `ftrace`
+### `fprobe` / `ftrace`
 https://docs.kernel.org/trace/fprobe.html
 reference to `kprobes`
 
 1. tried implementing module that register entry method of `syscall()` and `getdent64`, my entry log did not reached
 2. tried `fprobe` on `kernel_clone` so i could to `ptrace` to every new process that didnot work because `ptrace` wrapper is in `libc` and i cannot use it in the kernel
     
-#### `kprobes`
+### `kprobes`
 `sudo cat /proc/kallsyms | grep getdents`
     
 most interesting symbols
@@ -60,7 +61,7 @@ most interesting symbols
 
 https://stackoverflow.com/questions/78668467/cannot-read-syscall-arguments-from-a-kprobe-handler
 
-#### `kretprobes`
+### `kretprobes`
 `https://www.kernel.org/doc/Documentation/kprobes.txt`:
 There are currently two types of probes: kprobes, and kretprobes
 (also called return probes).  A kprobe can be inserted on virtually
