@@ -71,6 +71,9 @@ function returns.
 
 >switching to use `kretprobe` in order to get the return value of the syscall.
 
+## Implementation Notes
+`getdents` returns only filename.
+
 
 
 
