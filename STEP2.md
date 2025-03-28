@@ -22,7 +22,6 @@ intercepting somehow the call to `getdents64` and filtering my entries
 
 found this https://docs.kernel.org/core-api/entry.html
 
- 
 
 ##### signals
 reading about linux traps
@@ -60,6 +59,17 @@ most interesting symbols
  TODO check that how to get return value 
 
 https://stackoverflow.com/questions/78668467/cannot-read-syscall-arguments-from-a-kprobe-handler
+
+#### `kretprobes`
+`https://www.kernel.org/doc/Documentation/kprobes.txt`:
+There are currently two types of probes: kprobes, and kretprobes
+(also called return probes).  A kprobe can be inserted on virtually
+any instruction in the kernel.  A return probe fires when a specified
+function returns.
+
+
+>switching to use `kretprobe` in order to get the return value of the syscall.
+
 
 
 
