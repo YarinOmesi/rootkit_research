@@ -59,6 +59,8 @@ most interesting symbols
 - `__x64_sys_getdents64`
  TODO check that how to get return value 
 
+https://stackoverflow.com/questions/78668467/cannot-read-syscall-arguments-from-a-kprobe-handler
+
 
 
 ## General Notes

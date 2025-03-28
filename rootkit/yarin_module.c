@@ -9,26 +9,26 @@
 
 static struct kprobe kp;
 
-static int handler_pre(struct kprobe *p, struct pt_regs *regs)
+static int __kprobes handler_pre(struct kprobe *p, struct pt_regs *regs)
 {
-    //
-    unsigned long n = regs->ax;
+    // syscall wrappers __x64_sys_* gets only ptr to regs
     regs = ((struct pt_regs*)regs->di);
-    // Access the third argument of the getdents64 syscall on x86_64
 
-    unsigned long number = regs->ax;
-    unsigned long count = regs->dx;
-    printk("kprobe: getdents64 called with count = %ld, syscall = %ld, %ld\n", count, number, n);
+    unsigned long syscall = regs->orig_ax;
+    unsigned long fd = regs->di; // 0
+    unsigned long buffer_ptr = regs->si; // 1
+    unsigned long count = regs->dx; // 2
+
+    pr_info("getdents64(fd=%ld, buffer_ptr=%ld, count=%ld)\n",fd, buffer_ptr, count);
     return 0;
 }
 
-static void handle_post(struct kprobe * p, struct pt_regs * regs,
+static void __kprobes handle_post(struct kprobe * p, struct pt_regs * regs,
                        unsigned long flags)
 {
     regs = ((struct pt_regs*)regs->di);
     unsigned long count = regs->dx;
-    printk("kprobe: getdents64 return = %ld\n", count);
-    return 0;
+    pr_info("getdents64 return = %ld\n", count);
 }
 
 static int __init entrypoint(void)
@@ -38,10 +38,10 @@ static int __init entrypoint(void)
     kp.symbol_name = "__x64_sys_getdents64";
 
     if (register_kprobe(&kp) < 0) {
-        printk("register_kprobe failed\n");
+        pr_info("register_kprobe failed\n");
         return -1;
     }
-    printk("kprobe registered\n");
+    pr_info("kprobe registered\n");
     pr_info("Yarin Module end\n");
     return 0;
 }
