@@ -29,7 +29,7 @@ static struct kretprobe kretp = {
 
 struct getdent64_arguments {
     unsigned int fd;
-    void* buffer_ptr;
+    __user void* buffer_ptr;
     unsigned int count;
 };
 
@@ -67,10 +67,10 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
     struct getdent64_arguments* args = (struct getdent64_arguments*) ri->data;
     unsigned long retval = regs_return_value(regs);
 
-    pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, args->buffer_ptr, args->count, retval);
+    pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, retval);
 
     if(retval < 100){
-        struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr);
+        __user struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr);
 
         pr_info("first name is %s\n", current_ent->d_name);
     }
