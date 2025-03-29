@@ -72,7 +72,7 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
     if(retval < 100 && retval > 0 ){
         __user struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr);
 
-        pr_info("first name is %s\n", current_ent->d_name);
+        //pr_info("first name is %s\n", current_ent->d_name);
     }
 
 //    unsigned long offset = 0;
