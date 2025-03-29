@@ -69,9 +69,11 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
 
     pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, args->buffer_ptr, args->count, retval);
 
-    struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr);
+    if(retval < 100){
+        struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr);
 
-    pr_info("first name is %s\n", current_ent->d_name);
+        pr_info("first name is %s\n", current_ent->d_name);
+    }
 
 //    unsigned long offset = 0;
 //
