@@ -1,1 +1,1 @@
-obj-m += yarin_module.o
+obj-m := yarin_module.o
