@@ -45,7 +45,7 @@ what netstat do:
    my server is bound to `0.0.0.0:9090` and `local_address` is `00000000:2382`, 9090 = 0x2382
 
 
-## Missing Directory Path 
+### Missing Directory Path 
 1. need to find a way to get directory path from fd
 2. https://stackoverflow.com/questions/33986081/resolving-file-descriptor-to-file-name-file-path
 3. https://stackoverflow.com/questions/32265125/when-to-use-fcheck-or-fcheck-files-and-for-what
@@ -62,6 +62,8 @@ what netstat do:
 ## Implementation Notes
 Idea
 if `fd` of entry points to `/proc/<pidtohide>/fd/<fd with socket>` filter the entry.
+> seems that filtering the entry does not top `netstat` from displaying the socket, just without the pid.
+
 
 1. get the directory from `fd`
 2. if it is in `/proc/<pidtohide>/fd/`

