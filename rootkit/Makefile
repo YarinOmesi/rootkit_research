@@ -1,5 +1,4 @@
 KDIR ?= /lib/modules/`uname -r`/build
-KBUILD_CFLAGS += -g -Wall
 
 default:
 	$(MAKE) -C $(KDIR) M=$$PWD

