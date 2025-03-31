@@ -108,7 +108,7 @@ static int getents64_handle_return(struct kretprobe_instance *ri, struct pt_regs
 }
 
 
-static struct kretprobe kretp = {
+static struct kretprobe getdents64_kret_probe = {
         .maxactive = 20,
         .entry_handler = getents64_handle_entry,
         .handler = getents64_handle_return,
@@ -120,7 +120,7 @@ static struct kretprobe kretp = {
 static int __init entrypoint(void)
 {
 
-    if (register_kretprobe(&kretp) < 0) {
+    if (register_kretprobe(&getdents64_kret_probe) < 0) {
         pr_info("register_kretprobe failed\n");
         return -1;
     }
@@ -130,9 +130,9 @@ static int __init entrypoint(void)
 
 static void __exit cleanup(void){
     pr_info("Missed probing %d instances of %s\n",
-            kretp.nmissed, kretp.kp.symbol_name);
+            getdents64_kret_probe.nmissed, getdents64_kret_probe.kp.symbol_name);
 
-    unregister_kretprobe(&kretp);
+    unregister_kretprobe(&getdents64_kret_probe);
     pr_info("Yarin Module cleanup\n");
 }
 
