@@ -69,3 +69,8 @@ if `fd` of entry points to `/proc/<pidtohide>/fd/<fd with socket>` filter the en
 2. if it is in `/proc/<pidtohide>/fd/`
    1.  for each `fd` do `readlink` to check if it is a socket - if it is filter the entry
          cannot do readlink in kernel
+
+
+https://stackoverflow.com/questions/24447841/alternative-for-find-task-by-pid
+https://stackoverflow.com/questions/5406942linux-get-process-name-from-pid-within-kernel
+https://unix.stackexchange.com/questions/178383/how-is-the-open-file-table-structured

