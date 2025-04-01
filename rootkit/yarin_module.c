@@ -130,10 +130,6 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
 
     // intercepting only /proc/net/tcp or /proc/pid/net/tcp
     if(strcmp(sb->s_id, "proc") == 0 && ends_with(path, "/net/tcp")){
-        int index = -1;
-        unsigned long address = -1;
-        unsigned short port = -1;
-
         char* row_start = args->buffer_ptr;
         int new_length = 0;
         for(int row = 0; *row_start != '\0' ; row++){
@@ -148,6 +144,10 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
                 // "Skip" first row
                 new_length += row_length;
             } else {
+                int index = -1;
+                unsigned long address = -1;
+                unsigned short port = -1;        
+
                 int result = sscanf(row_start, "%d: %lX:%hX", &index, &address, &port);
                 
                 if(result == 3){
