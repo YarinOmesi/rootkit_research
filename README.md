@@ -1,5 +1,7 @@
 # rootkit_research
-- [step1](./STEP1.md)
+- [step 1](./STEP1.md)
+- [step 2](./STEP2.md)
+- [step 3](./STEP3.md)
 
 ## General Notes
 
