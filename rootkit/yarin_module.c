@@ -166,7 +166,7 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
             row_start += row_length;
         }
         
-        // read returns the number of bytes it read
+        // read syscall returns the number of bytes it read
         regs_set_return_value(regs, new_length);                    
     }
     return 0;
