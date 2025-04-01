@@ -3,17 +3,18 @@
 2. find server port with `netstat -tlnp`, found that [here](https://superuser.com/questions/529830/get-a-list-of-open-ports-in-linux).
 3. use `strace` to figure out how `netstat` works. [example_output](./netstat_trace.txt)
 
-what netstat do:
-1. call `getdents64` on `/proc` to get all process (not only exists processes)
-2. iterate all entries checking if `/proc/<PID>/fd` exists / not empty
-3. open `fd` - points to directory with process information
-4. call `getdents64` on opened `/proc/<PID>/fd`
-5. iterate to find open `/proc/<PID>/fd/<FD>`
-6. on open `fd` reading the content of link with `readlink`
-7. if `fd` pointing to `socket` 
-    1. get `cmeline` once
-    2. for every `fd` that point to socket open and read from `/proc/<PID>/attr/current` ???? 
-8. at the end reads from `/proc/net/tcp`
+### what netstat do:
+1. get processs data
+   1. call `getdents64` on `/proc` to get all process (not only exists processes)
+   2. iterate all entries checking if `/proc/<PID>/fd` exists / not empty
+   3. open `fd` - points to directory with process information
+   4. call `getdents64` on opened `/proc/<PID>/fd`
+   5. iterate to find open `/proc/<PID>/fd/<FD>`
+   6. on open `fd` reading the content of link with `readlink`
+   7. if `fd` pointing to `socket` 
+      1. get `cmeline` once
+      2. for every `fd` that point to socket open and read from `/proc/<PID>/attr/current` ???? 
+2. read port and addresses from `/proc/net/tcp`
 
 
 
@@ -60,6 +61,12 @@ what netstat do:
 
 
 ## Implementation Notes
+
+### Original Idea
+> `netstat` main source is `/proc/net/tcp` and not `/proc/pid/fd/fd`, is it 
+> enough to just hide the relevant data fom `/proc/net/tcp`. 
+> **Therefore i stoped following this idea path**.
+ 
 Idea
 if `fd` of entry points to `/proc/<pidtohide>/fd/<fd with socket>` filter the entry.
 > seems that filtering the entry does not top `netstat` from displaying the socket, just without the pid.
@@ -70,7 +77,12 @@ if `fd` of entry points to `/proc/<pidtohide>/fd/<fd with socket>` filter the en
    1.  for each `fd` do `readlink` to check if it is a socket - if it is filter the entry
          cannot do readlink in kernel
 
+### Final Implementation
+1. hooking the `read` syscall 
+2. if `fd` is to `/proc/net/tcp`
+   1. parse each line
+   2. skip line if it contains port to hide
+   3. write other line back
+   4. return new size of read bytes
 
-https://stackoverflow.com/questions/24447841/alternative-for-find-task-by-pid
-https://stackoverflow.com/questions/5406942linux-get-process-name-from-pid-within-kernel
-https://unix.stackexchange.com/questions/178383/how-is-the-open-file-table-structured
+> just removing the entry, without changing `sl`/line index
