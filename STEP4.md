@@ -14,4 +14,4 @@
 ## Ideas
 1. hide my process pid from first `getdents`. This did not work, `ps` outputed an error
 2. make `newfstatat` return that the directory is not exists ? or cant be opned
-3. make `newfstatat` return that the directory is not exists ? or cant be opned
+3. make `openat` return that the directory is not exists ? or cant be opned
