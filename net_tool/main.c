@@ -61,7 +61,7 @@ int main(int argc, char* argv[]){
 
 void server(int port) {
     printf("Starting server at 0.0.0.0:%d\n", port);
-    int socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in addr;
 
     memset(&addr, 0, sizeof(struct sockaddr_in));
@@ -93,7 +93,7 @@ void server(int port) {
 }
 
 void client(int port, char* message){
-    int socket_fd = socket(AF_INET, SOCK_DGRAM, 0);
+    int socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in addr;
 
     memset(&addr, 0, sizeof(struct sockaddr_in));
