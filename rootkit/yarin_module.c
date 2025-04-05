@@ -234,11 +234,11 @@ unsigned int netfilter_ip_hook_func(void *priv, struct sk_buff *skb, const struc
     struct ethhdr *eth = eth_hdr(skb);
     struct iphdr *ip = ip_hdr(skb);
 
-    printk("caller: %s\n", current->comm);
-    printk("mac: %pM\n", eth->h_source);
-    printk("ip protocol: %d\n", ip->protocol);
-    printk("ip protocol: %d\n", ip->protocol);
-    printk("%pI4 -> %pI4\n", &ip->saddr, &ip->daddr);
+    // printk("caller: %s\n", current->comm);
+    // printk("mac: %pM\n", eth->h_source);
+    // printk("ip protocol: %d\n", ip->protocol);
+    // printk("ip protocol: %d\n", ip->protocol);
+    // printk("%pI4 -> %pI4\n", &ip->saddr, &ip->daddr);
 
     unsigned long ip_source = ip->saddr;
     unsigned long my_ip = 0;
@@ -287,16 +287,42 @@ unsigned int netfilter_ip_hook_func(void *priv, struct sk_buff *skb, const struc
     return NF_ACCEPT;
 }
 
+struct arp_ip_request {
+    unsigned char sender_ha_addr[ETH_ALEN];
+    unsigned char sender_ip_addr[4];
+    
+    unsigned char target_ha_addr[ETH_ALEN];
+    unsigned char target_ip_addr[4];
+};
+
 unsigned int netfilter_arp_hook_func(void * priv, struct sk_buff * skb, const struct nf_hook_state * state){
-    struct ethhdr *eth = eth_hdr(skb);
     struct arphdr * arp = arp_hdr(skb);
+    struct arp_ip_request  arp_request;
     unsigned short op = ntohs(arp->ar_op);
 
-    if(op == ARPOP_REQUEST){
-        struct arpreq* req = (struct arpreq*) (((char*) arp) + sizeof(struct arphdr));
-        pr_info("Arp %pI4\n",&req->arp_pa);
+    // only ARP IP request
+    if(op != ARPOP_REQUEST || ntohs(arp->ar_pro) != ETH_P_IP){
+        return NF_ACCEPT;
     }
-    pr_info("Arp: opcode=%d\n", op);        
+
+    // copy to buffer
+    if(skb_copy_bits(skb, sizeof(struct arphdr), (void*)&arp_request, sizeof(struct arp_ip_request)) < 0){
+        pr_warn("Cannot copy from packet\n");
+        return NF_ACCEPT;
+    }
+
+    // pr_info("ARP from %pI4 Searching %pI4\n", arp_request.sender_ip_addr, arp_request.target_ip_addr);
+
+    unsigned long my_ip = 0;
+    memcpy(&my_ip, selected_ip, 4);
+    unsigned long sender_ip = 0;
+    memcpy(&sender_ip, arp_request.sender_ip_addr, 4);
+
+    if(sender_ip == my_ip){
+        pr_info("DROPING ARP from %pI4 Searching %pI4\n", arp_request.sender_ip_addr, arp_request.target_ip_addr);
+        return NF_DROP;
+    }
+
     return NF_ACCEPT;
 }
 
