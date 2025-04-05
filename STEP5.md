@@ -25,10 +25,27 @@ https://docs.kernel.org/networking/skbuff.html
         2. explored `arp_tables.c` and `ip_tables.c` file
             1. contains some kind of packet matching
             2. `xt_tables` ? after search online, got to this https://medium.com/@dipakkrdas/netfilter-and-iptables-f8a946bb83af
+        3. Search `netfilter` in Documentation directory
+            1. in `networking/bridge.rst` found:
+                ```
+                Netfilter
+                =========
+
+                The bridge netfilter module is a legacy feature that allows to filter bridged
+                packets with iptables and ip6tables. Its use is discouraged. Users should
+                consider using nftables for packet filtering.
+                ```
+
+            2. Search For `nftables` in source
+                /home/yarin/code/rootkit_research/linux/net/bridge/netfilter/nft_reject_bridge.c
+            3. https://github.com/jdaeman/example/blob/master/netfilter.c
 
 
 
-## Ideas
-find the kernel code:
-1. do sockets
-2. pealing the packets 
+## Implementation Notes
+1. used `netfilter` to capture and filter `IP` layer packets
+    1. hide spesific packets from my UDP server (based on contents)
+    2. hide `ping`s from spesific ip 
+
+> `arp` is not ip packet, so cant use `NFPROTO_INET` for defining a filter, 
+> `NFPROTO_BRIGED` did not work, so i added another hook with `NFPROTO_ARP`.

@@ -16,21 +16,22 @@ const char* SERVER = "server";
 const char* CLIENT = "client";
 
 const int ARG_INDEX = 1;
-const int ARG_PORT = 2;
-const int ARG_MESSAGE = 3;
+const int ARG_ADDR = 2;
+const int ARG_PORT = 3;
+const int ARG_MESSAGE = 4;
 
 void print_usage();
 
-void server(int port);
+void server(in_addr_t addr,int port);
 
-void client(int port, char* message);
+void client(in_addr_t dest_addr, int port, char* message);
 
 
 int main(int argc, char* argv[]){
     // zero the buffer
     memset(buffer, 0, BUFFER_SIZE);
 
-    // cli <tool> <server / client> <port> <string message>?
+    // cli <tool> <server / client> <addr> <port> <string message>?
 
     if(argc < 2){
         printf("Not enogh arguments\n");
@@ -38,13 +39,34 @@ int main(int argc, char* argv[]){
         return 1;
     }
 
+
+    in_addr_t in_addr;
+
+    {
+        char* addr = argv[ARG_ADDR];
+
+        int a, b, c, d;
+
+        int count = sscanf(addr, "%d.%d.%d.%d", &a, &b, &c, &d);
+    
+        if(count != 4){
+            fprintf(stderr, "cant parse address %s\n", addr);
+            return 1;
+        }
+        // big endian
+        unsigned int addr_int = d << 24 | c << 16 | b << 8 | a;
+        in_addr = addr_int;
+    }
+
     int port = atoi(argv[ARG_PORT]);
 
+    printf("%X:%d\n", in_addr, port);
+
     if(strcmp(argv[ARG_INDEX], SERVER) == 0){
-        server(port);
+        server(in_addr, port);
     } else if(strcmp(argv[ARG_INDEX], CLIENT) == 0){
-        if(argc == 4) {
-            client(port, argv[ARG_MESSAGE]);
+        if(argc == 5) {
+            client(in_addr, port, argv[ARG_MESSAGE]);
         } else {
             print_usage();
             return 1;
@@ -59,15 +81,15 @@ int main(int argc, char* argv[]){
     return 0;
 }
 
-void server(int port) {
-    printf("Starting server at 0.0.0.0:%d\n", port);
+void server(in_addr_t host_addr, int port) {
+    printf("Starting server at %X:%d\n", host_addr, port);
     int socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in addr;
 
     memset(&addr, 0, sizeof(struct sockaddr_in));
 
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY); // 0.0.0.0
+    addr.sin_addr.s_addr = htonl(host_addr);
     addr.sin_port = ntohs(port);
 
 
@@ -92,20 +114,22 @@ void server(int port) {
     close(socket_fd);
 }
 
-void client(int port, char* message){
+void client(in_addr_t dest_addr, int port, char* message){
     int socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     struct sockaddr_in addr;
 
     memset(&addr, 0, sizeof(struct sockaddr_in));
 
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY); // 0.0.0.0
+    addr.sin_addr.s_addr = dest_addr;
     addr.sin_port = ntohs(port);
 
     // Copy Message To The Buffer
     strcpy(buffer, message);
 
-    int bytes_read = sendto(socket_fd, (void*)buffer, BUFFER_SIZE, 0, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));
+    int len = strlen(message);
+
+    int bytes_read = sendto(socket_fd, (void*)buffer, len, 0, (struct sockaddr*)&addr, sizeof(struct sockaddr_in));
     if(bytes_read == -1){
         fprintf(stderr, "Error: %d\n", errno);
     }else{
