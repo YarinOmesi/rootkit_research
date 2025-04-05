@@ -13,10 +13,14 @@ char buffer[BUFFER_SIZE];
 const char *SERVER = "server";
 const char *CLIENT = "client";
 
-const int ARG_MODE = 1;
-const int ARG_ADDR = 2;
-const int ARG_PORT = 3;
-const int ARG_MESSAGE = 4;
+enum arg {
+    ARG_MODE = 1,
+    ARG_ADDR,
+    ARG_PORT,
+    ARG_MESSAGE,
+    ARG_COUNT = ARG_MESSAGE
+};
+
 
 void print_usage();
 
@@ -65,7 +69,7 @@ int main(int argc, char *argv[]) {
     if (strcmp(argv[ARG_MODE], SERVER) == 0) {
         server(ipv4_addr);
     } else if (strcmp(argv[ARG_MODE], CLIENT) == 0) {
-        if (argc == 5) {
+        if ((argc - 1) == (ARG_COUNT)) {
             client(ipv4_addr, argv[ARG_MESSAGE]);
         } else {
             print_usage();
