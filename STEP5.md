@@ -46,6 +46,7 @@ https://docs.kernel.org/networking/skbuff.html
 1. used `netfilter` to capture and filter `IP` layer packets
     1. hide spesific packets from my UDP server (based on contents)
     2. hide `ping`s from spesific ip 
+    3. hide `arp`s request from spesific ip 
 
 > `arp` is not ip packet, so cant use `NFPROTO_INET` for defining a filter, 
 > `NFPROTO_BRIGED` did not work, so i added another hook with `NFPROTO_ARP`.

