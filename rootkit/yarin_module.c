@@ -178,7 +178,6 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
                     new_length += row_length;
                 }
             }
-            static 
             row_start += row_length;
         }
         
