@@ -20,9 +20,9 @@ const int ARG_MESSAGE = 4;
 
 void print_usage();
 
-void server(struct in_addr addr, int port);
+void server(struct sockaddr_in addr);
 
-void client(struct in_addr dest_addr, int port, char *message);
+void client(struct sockaddr_in dest_addr, char *message);
 
 
 int main(int argc, char *argv[]) {
@@ -56,14 +56,17 @@ int main(int argc, char *argv[]) {
     }
 
     int port = atoi(argv[ARG_PORT]);
-
-    printf("%s:%d\n", inet_ntoa(in_addr), port);
+    struct sockaddr_in ipv4_addr = {
+            .sin_family = AF_INET,
+            .sin_addr = in_addr,
+            .sin_port = htons(port),
+    };
 
     if (strcmp(argv[ARG_MODE], SERVER) == 0) {
-        server(in_addr, port);
+        server(ipv4_addr);
     } else if (strcmp(argv[ARG_MODE], CLIENT) == 0) {
         if (argc == 5) {
-            client(in_addr, port, argv[ARG_MESSAGE]);
+            client(ipv4_addr, argv[ARG_MESSAGE]);
         } else {
             print_usage();
             return 1;
@@ -78,16 +81,9 @@ int main(int argc, char *argv[]) {
     return 0;
 }
 
-void server(struct in_addr host_addr, int port) {
-    printf("Starting server at %s:%d\n", inet_ntoa(host_addr), port);
+void server(struct sockaddr_in addr) {
+    printf("Starting server at %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
     int socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    struct sockaddr_in addr = {0};
-
-    addr.sin_family = AF_INET;
-    addr.sin_addr = host_addr;
-    addr.sin_port = ntohs(port);
-
-
     int result = bind(socket_fd, (struct sockaddr *) &addr, sizeof(addr));
 
     if (result == -1) {
@@ -108,13 +104,9 @@ void server(struct in_addr host_addr, int port) {
     close(socket_fd);
 }
 
-void client(struct in_addr dest_addr, int port, char *message) {
+void client(struct sockaddr_in addr, char *message) {
+    printf("Sending to %s:%d\n", inet_ntoa(addr.sin_addr), ntohs(addr.sin_port));
     int socket_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-    struct sockaddr_in addr = {0};
-
-    addr.sin_family = AF_INET;
-    addr.sin_addr = dest_addr;
-    addr.sin_port = ntohs(port);
 
     // Copy Message To The Buffer
     strcpy(buffer, message);
