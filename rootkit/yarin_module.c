@@ -370,7 +370,7 @@ static unsigned int netfilter_arp_hook_func(void * priv, struct sk_buff * skb, c
 
 
 
-static const int net_hook_count = 1;
+static const int net_hook_count = 2;
 static struct nf_hook_ops net_hooks[] = {
     {
         .hook = netfilter_ip_hook_func,
