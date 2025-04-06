@@ -29,4 +29,6 @@ CONFIG_SECURITYFS=y
 to linux .config
 
 
+### Develoment IN IDE
+Added [CMakeLists.txt](./rootkit/CMakeLists.txt) with dummy target to help the IDE resolve the right headers.
 
