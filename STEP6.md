@@ -16,3 +16,10 @@
 if `1.` not enough
 
 2. hook `openat` and return not found on any files under : `/sys/module/yarin_module/*`
+
+
+## Implementation Notes
+1. Implemented Idea 1, Removed the line in `/proc/modules` that describe my module as a result `lsmod` does not show my module.
+
+## Notes 
+1. we still can see the loaded modules with `ls /sys/modules`
