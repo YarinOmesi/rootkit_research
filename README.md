@@ -3,6 +3,7 @@
 - [step 2](./STEP2.md)
 - [step 3](./STEP3.md)
 - [step 4](./STEP4.md)
+- [step 5](./STEP5.md)
 
 ## General Notes
 

