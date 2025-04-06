@@ -297,7 +297,7 @@ static unsigned int netfilter_ip_hook_func(void *priv, struct sk_buff *skb, cons
             // ping
             if (icmp->type == ICMP_ECHO)
             {
-                pr_info("Found Ping %lX %lX\n", ip_source, my_ip);
+                pr_info("Dropping PING %pI4\n", &ip_source);
                 return NF_DROP;
             }
         }
