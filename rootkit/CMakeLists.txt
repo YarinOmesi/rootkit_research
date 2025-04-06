@@ -1,3 +1,5 @@
+# THIS FILE EXIST FOR CLION TO RESOLVE THE RIGHT HEADERS
+
 cmake_minimum_required(VERSION 3.28)
 
 project(yarin_module LANGUAGES C)
