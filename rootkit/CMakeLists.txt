@@ -7,6 +7,7 @@ set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
 
 add_definitions(-D__KERNEL__ -DMODULE)
+add_definitions(-DKBUILD_MODNAME="dummy_module_name")
 
 execute_process(
         COMMAND uname -r
