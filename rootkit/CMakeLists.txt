@@ -31,6 +31,7 @@ message(STATUS "Binary Dir ${CMAKE_CURRENT_BINARY_DIR}")
 include_directories(
         ${KERNELHEADERS_DIR}/include
         ${KERNELHEADERS_DIR}/arch/x86/include
+        include
 )
 
-add_library(dummy_target yarin_module.c)
+add_library(dummy_target yarin_module_main.c helpers.c)

