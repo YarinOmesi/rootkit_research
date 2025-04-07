@@ -33,3 +33,17 @@ to linux .config
 ### Develoment IN IDE
 Added [CMakeLists.txt](./rootkit/CMakeLists.txt) with dummy target to help the IDE resolve the right headers.
 
+
+### Using Module Parameters
+declared as following
+
+```c
+#include<linux/moduleparam.h>
+
+static char* value = "DefaultValue";
+module_param(value, charp, 0644);
+```
+Pass values in load time as 
+
+`sudo insmod <modulename> value="newValue"`
+
