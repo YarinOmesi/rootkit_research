@@ -16,6 +16,9 @@ the solution seems to fix the error https://www.reddit.com/r/voidlinux/comments/
 
 ---
 ### Running linux with Qemu
+> I Used VM instead
+
+
 https://www.qemu.org/docs/master/system/linuxboot.html
 
 https://vccolombo.github.io/cybersecurity/linux-kernel-qemu-setup/
