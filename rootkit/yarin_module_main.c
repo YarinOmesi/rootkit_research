@@ -2,16 +2,11 @@
 
 #include <linux/module.h>
 #include <linux/kernel.h>
-#include <asm/unistd.h>
-#include <linux/kthread.h>
 #include <linux/kprobes.h>
 #include <linux/fprobe.h>
-#include <linux/dirent.h>
 #include <linux/string.h>
 #include <linux/fdtable.h>
 #include <linux/sched.h>
-#include <linux/mm_types.h>
-#include <linux/sched/signal.h>
 
 #include <linux/netfilter.h>
 #include <linux/udp.h>
