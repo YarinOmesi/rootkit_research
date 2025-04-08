@@ -34,4 +34,4 @@ include_directories(
         include
 )
 
-add_library(dummy_target yarin_module_main.c helpers.c step2.c step3.c)
+add_library(dummy_target yarin_module_main.c helpers.c step2.c step3.c step5.c)
