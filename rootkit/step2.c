@@ -1,5 +1,6 @@
-#include "step2.h"
+#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
+#include "step2.h"
 #include <linux/module.h>
 #include <linux/dirent.h>
 
